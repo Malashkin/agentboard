@@ -353,7 +353,7 @@ struct MenuBarLabel: View {
         let active = store.activeAgents().count
         let attention = store.waitingCount
         HStack(spacing: 3) {
-            Image(systemName: attention > 0 ? "exclamationmark.bubble.fill" : "circle.hexagongrid.fill")
+            if attention > 0 { Image(systemName: "exclamationmark.bubble.fill") } else { Image(nsImage: Logo.menuBarImage) }
             if active > 0 { Text("\(active)") }
         }
         .onChange(of: store.openMainTick) {

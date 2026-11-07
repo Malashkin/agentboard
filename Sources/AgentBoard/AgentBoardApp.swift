@@ -121,18 +121,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    /// Writes the evening summary once a day after the configured time, if anything happened.
+    /// Evening summary: written at the configured time while the app runs (within an hour of it);
+    /// if the app was closed then, yesterday's summary is written on the next launch.
     static func maybeAutoSummary() {
-        guard AppSettings.autoSummary else { return }
+        guard AppSettings.autoSummary, !isTesting else { return }
         let cal = Calendar.current
         let nowDate = Date()
-        guard let due = cal.date(bySettingHour: AppSettings.summaryHour, minute: AppSettings.summaryMinute, second: 0, of: nowDate),
-              nowDate >= due else { return }
-        let key = Fmt.dayKey.string(from: nowDate)
         let store = Store.shared
-        if store.summaries.contains(where: { $0.day == key }) || store.generatingDays.contains(key) { return }
-        let start = cal.startOfDay(for: nowDate).timeIntervalSince1970
-        guard store.events.contains(where: { $0.createdAt >= start }) else { return }
-        store.generateSummary(day: nowDate)
+        func hasSummary(_ d: Date) -> Bool {
+            let k = Fmt.dayKey.string(from: d)
+            return store.summaries.contains { $0.day == k } || store.generatingDays.contains(k)
+        }
+        func hadActivity(_ d: Date) -> Bool {
+            let (from, to) = SummaryService.dayRange(d)
+            return Core.shared.q.sync {
+                !Core.shared.db.query("SELECT id FROM events WHERE created_at >= ? AND created_at < ? LIMIT 1", [from, to]).isEmpty
+            }
+        }
+        if let due = cal.date(bySettingHour: AppSettings.summaryHour, minute: AppSettings.summaryMinute, second: 0, of: nowDate),
+           nowDate >= due, nowDate < due.addingTimeInterval(3600), !hasSummary(nowDate), hadActivity(nowDate) {
+            store.generateSummary(day: nowDate)
+            return
+        }
+        if let y = cal.date(byAdding: .day, value: -1, to: nowDate), !hasSummary(y), hadActivity(y) {
+            store.generateSummary(day: y)
+        }
     }
+
+    /// Isolated test runs never call the real `claude`.
+    static var isTesting: Bool { ProcessInfo.processInfo.environment["AGENTBOARD_DATA_DIR"] != nil }
 }
