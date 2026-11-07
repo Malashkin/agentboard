@@ -2,28 +2,24 @@ import SwiftUI
 
 struct OverviewView: View {
     @EnvironmentObject var store: Store
+    @ObservedObject private var theme = ThemeStore.shared
     @Binding var selection: NavItem?
+    @State private var editing = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Обзор").font(.largeTitle.bold())
+            VStack(alignment: .leading, spacing: theme.density.spacing + 6) {
+                HStack {
+                    Text("Обзор").font(.largeTitle.bold())
+                    Spacer()
+                    if !store.projects.isEmpty && !editing {
+                        Button { ThemeStore.animate { editing = true } } label: { Label("Настроить панель", systemImage: "square.grid.3x3.square") }
+                    }
+                }
                 if store.projects.isEmpty {
                     Onboarding(selection: $selection)
                 } else {
-                    let active = store.activeAgents()
-                    HStack(spacing: 12) {
-                        StatTile(title: "Агентов работает", value: "\(active.count)", icon: "person.2.wave.2", color: .green)
-                        StatTile(title: "Ждут вас", value: "\(store.waitingCount)", icon: "hand.raised", color: .orange)
-                        StatTile(title: "Коммитов сегодня", value: "\(store.git.values.reduce(0) { $0 + $1.todayCommits.count })",
-                                 icon: "checkmark.seal", color: .purple)
-                        StatTile(title: "Задач закрыто сегодня", value: "\(store.tasks.filter { ($0.doneAt ?? 0) >= Calendar.current.startOfDay(for: store.now).timeIntervalSince1970 }.count)",
-                                 icon: "checklist.checked", color: .blue)
-                    }
-                    Text("Агенты").font(.title2.bold())
-                    AgentsGrid(projectId: nil, showProject: true)
-                    Text("Лента").font(.title2.bold())
-                    FeedList(projectId: nil, limit: 60)
+                    Dashboard(key: "overview", projectId: nil, editing: $editing)
                 }
             }
             .padding(20)
@@ -50,8 +46,10 @@ struct Onboarding: View {
 
 struct ProjectView: View {
     @EnvironmentObject var store: Store
+    @ObservedObject private var theme = ThemeStore.shared
     let projectId: String
-    @State private var tab = 0
+    @AppStorage("projectTab") private var tab = 0
+    @State private var editing = false
 
     var body: some View {
         if let p = store.project(projectId) {
@@ -60,30 +58,38 @@ struct ProjectView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(p.name).font(.title.bold())
-                            if !p.client.isEmpty { Pill(text: p.client, color: .accentColor, icon: "person.crop.square") }
+                            if !p.client.isEmpty { Pill(text: p.client, color: theme.accent, icon: "person.crop.square") }
                         }
                         Text(p.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                     Spacer()
-                    Picker("", selection: $tab) {
-                        Text("Агенты").tag(0)
-                        Text("Задачи").tag(1)
-                        Text("Лента").tag(2)
-                        Text("Git").tag(3)
-                        Text("Настройки").tag(4)
+                    if tab == 0 && !editing {
+                        Button { ThemeStore.animate { editing = true } } label: { Label("Настроить", systemImage: "square.grid.3x3.square") }
+                    }
+                    Picker("", selection: Binding(get: { tab }, set: { v in ThemeStore.animate { tab = v } })) {
+                        Text("Панель").tag(0)
+                        Text("Агенты").tag(1)
+                        Text("Задачи").tag(2)
+                        Text("Лента").tag(3)
+                        Text("Git").tag(4)
+                        Text("Настройки").tag(5)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 440)
+                    .frame(width: 500)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 14)
                 Divider()
-                switch tab {
-                case 0: ScrollView { AgentsGrid(projectId: p.id).padding(20) }
-                case 1: BoardView(projectId: p.id)
-                case 2: ScrollView { FeedList(projectId: p.id, limit: 500, showComposer: true).padding(20) }
-                case 3: GitView(projectId: p.id)
-                default: ProjectSettingsView(project: p)
+                Group {
+                    switch tab {
+                    case 0: ScrollView { Dashboard(key: "project:" + p.id, projectId: p.id, editing: $editing).padding(20) }
+                    case 1: ScrollView { AgentsGrid(projectId: p.id).padding(20) }
+                    case 2: BoardView(projectId: p.id)
+                    case 3: ScrollView { FeedList(projectId: p.id, limit: 500, showComposer: true).padding(20) }
+                    case 4: GitView(projectId: p.id)
+                    default: ProjectSettingsView(project: p)
+                    }
                 }
+                .transition(.opacity)
             }
         } else {
             Text("Проект не найден").foregroundStyle(.secondary)
@@ -130,8 +136,8 @@ struct FeedList: View {
             }
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(items) { e in
-                    row(e)
-                    Divider()
+                    VStack(spacing: 0) { row(e); Divider() }
+                        .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
                 }
             }
         }

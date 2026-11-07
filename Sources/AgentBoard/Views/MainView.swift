@@ -8,6 +8,7 @@ enum NavItem: Hashable {
 
 struct MainView: View {
     @EnvironmentObject var store: Store
+    @ObservedObject private var theme = ThemeStore.shared
     @State private var selection: NavItem? = .overview
     @State private var addError: String?
 
@@ -21,7 +22,7 @@ struct MainView: View {
                     Label("Подключения", systemImage: "point.3.connected.trianglepath.dotted").tag(NavItem.integrations)
                 }
                 Section("Проекты") {
-                    ForEach(store.projects) { p in
+                    ForEach(store.orderedProjects) { p in
                         HStack {
                             Label(p.name, systemImage: "folder")
                             Spacer()
@@ -38,6 +39,7 @@ struct MainView: View {
                         }
                         .tag(NavItem.project(p.id))
                     }
+                    .onMove { store.moveProjects(from: $0, to: $1) }
                 }
             }
             .navigationSplitViewColumnWidth(min: 210, ideal: 240)
@@ -59,7 +61,9 @@ struct MainView: View {
                 if let err = store.lastError {
                     Banner(text: err, color: .orange, icon: "exclamationmark.triangle") { store.lastError = nil }
                 }
-                if !store.pending.isEmpty { ApprovalsBanner() }
+                if !store.pending.isEmpty && !isDashboard {
+                    ApprovalsBanner().transition(.move(edge: .top).combined(with: .opacity))
+                }
                 Group {
                     switch selection ?? .overview {
                     case .overview: OverviewView(selection: $selection)
@@ -70,11 +74,25 @@ struct MainView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(selection)
+                .transition(.opacity)
             }
+            .background(theme.background ?? Color.clear)
+            .animation(theme.anim(), value: store.pending.count)
+            .animation(theme.anim(.easeInOut(duration: 0.2)), value: selection)
         }
+        .tint(theme.accent)
+        .preferredColorScheme(theme.colorScheme)
         .alert("Не удалось добавить проект", isPresented: Binding(get: { addError != nil }, set: { if !$0 { addError = nil } })) {
             Button("OK") { addError = nil }
         } message: { Text(addError ?? "") }
+    }
+
+    /// Dashboards show approvals as a widget, so the banner isn't duplicated there.
+    var isDashboard: Bool {
+        if case .overview = selection ?? .overview { return true }
+        if case .project = selection, UserDefaults.standard.integer(forKey: "projectTab") == 0 { return true }
+        return false
     }
 
     func addProject() {

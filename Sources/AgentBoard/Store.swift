@@ -45,19 +45,41 @@ final class Store: ObservableObject {
             let s = Core.shared.snapshot()
             DispatchQueue.main.async {
                 self.reloadScheduled = false
-                self.projects = s.projects
-                self.agents = s.agents
-                self.tasks = s.tasks
-                self.events = s.events
-                self.files = s.files
-                self.summaries = s.summaries
-                self.pending = s.pending
-                self.messages = s.messages
+                ThemeStore.animate { self.apply(s) }
             }
         }
     }
 
+    private func apply(_ s: Core.Snapshot) {
+        projects = s.projects
+        agents = s.agents
+        tasks = s.tasks
+        events = s.events
+        files = s.files
+        summaries = s.summaries
+        pending = s.pending
+        messages = s.messages
+    }
+
     func requestOpenMain() { openMainTick += 1 }
+
+    // MARK: Sidebar order (drag to reorder)
+
+    @Published var projectOrder: [String] = UserDefaults.standard.stringArray(forKey: "projectOrder") ?? []
+
+    var orderedProjects: [Project] {
+        projects.sorted { a, b in
+            let ia = projectOrder.firstIndex(of: a.id) ?? Int.max, ib = projectOrder.firstIndex(of: b.id) ?? Int.max
+            return ia == ib ? a.name.localizedCompare(b.name) == .orderedAscending : ia < ib
+        }
+    }
+
+    func moveProjects(from: IndexSet, to: Int) {
+        var ids = orderedProjects.map(\.id)
+        ids.move(fromOffsets: from, toOffset: to)
+        ThemeStore.animate { projectOrder = ids }
+        UserDefaults.standard.set(ids, forKey: "projectOrder")
+    }
 
     // MARK: Lookups
 

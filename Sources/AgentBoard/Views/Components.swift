@@ -4,11 +4,16 @@ import SwiftUI
 struct StatusBadge: View {
     let status: AgentStatus
     var body: some View {
-        Label(status.label, systemImage: status.icon)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(status.color)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(status.color.opacity(0.12), in: Capsule())
+        HStack(spacing: 5) {
+            PulseDot(color: status.color, active: status == .working || status == .waiting)
+            Text(status.label)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(status.color)
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(status.color.opacity(0.13), in: Capsule())
+        .contentTransition(.interpolate)
+        .animation(ThemeStore.shared.anim(), value: status)
     }
 }
 
@@ -24,38 +29,43 @@ struct Pill: View {
         .font(.caption)
         .foregroundStyle(color)
         .padding(.horizontal, 6).padding(.vertical, 2)
-        .background(color.opacity(0.12), in: Capsule())
+        .background(color.opacity(0.13), in: Capsule())
     }
 }
 
 struct Card<Content: View>: View {
     var tint: Color = .clear
     @ViewBuilder var content: Content
+    @ObservedObject private var theme = ThemeStore.shared
     var body: some View {
         content
-            .padding(12)
+            .padding(theme.density.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(tint == .clear ? Color.primary.opacity(0.08) : tint.opacity(0.55), lineWidth: 1))
+            .background(SurfaceBackground(radius: theme.density.radius, tint: tint))
     }
 }
 
 struct StatTile: View {
     let title: String
-    let value: String
+    let value: Int
     let icon: String
     var color: Color = .accentColor
+    @ObservedObject private var theme = ThemeStore.shared
     var body: some View {
         Card {
             HStack(spacing: 12) {
                 Image(systemName: icon).font(.title2).foregroundStyle(color).frame(width: 30)
+                    .symbolEffect(.bounce, value: value)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(value).font(.title2.weight(.semibold)).monospacedDigit()
-                    Text(title).font(.caption).foregroundStyle(.secondary)
+                    Text("\(value)").font(.title2.weight(.semibold)).monospacedDigit()
+                        .contentTransition(.numericText(value: Double(value)))
+                        .animation(theme.anim(), value: value)
+                    Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
             }
         }
+        .hoverLift()
     }
 }
 

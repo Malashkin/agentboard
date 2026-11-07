@@ -206,6 +206,9 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            AppearanceSettings()
+                .tabItem { Label("Оформление", systemImage: "paintpalette") }
+
             Form {
                 Toggle("Запускать при входе в систему", isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
                 Stepper("Агент неактивен после \(Int(staleMinutes)) мин тишины", value: $staleMinutes, in: 5...240, step: 5)
@@ -254,7 +257,89 @@ struct SettingsView: View {
             .tabItem { Label("Сводка", systemImage: "doc.richtext") }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 380)
+        .frame(width: 640, height: 520)
+        .tint(ThemeStore.shared.accent)
+    }
+}
+
+struct AppearanceSettings: View {
+    @ObservedObject private var theme = ThemeStore.shared
+
+    var body: some View {
+        Form {
+            Section("Цветовая схема") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 12)], spacing: 12) {
+                    ForEach(ThemePreset.allCases) { p in swatch(p) }
+                }
+                .padding(.vertical, 4)
+            }
+            Section("Цвета") {
+                HStack {
+                    ColorPicker("Акцентный цвет", selection: theme.accentBinding, supportsOpacity: false)
+                    if !theme.customAccentHex.isEmpty {
+                        Button("Как в схеме") { ThemeStore.animate { theme.customAccentHex = "" } }
+                    }
+                }
+                Picker("Оформление", selection: $theme.appearance) {
+                    ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .disabled(theme.preset != .system)
+                if theme.preset != .system {
+                    Text("Светлое/тёмное задаёт выбранная схема. Для выбора вручную возьмите «Системную».")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Section("Интерфейс") {
+                Picker("Плотность", selection: Binding(get: { theme.density }, set: { v in ThemeStore.animate { theme.density = v } })) {
+                    ForEach(Density.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Picker("Карточки", selection: Binding(get: { theme.cardStyle }, set: { v in ThemeStore.animate { theme.cardStyle = v } })) {
+                    ForEach(CardStyle.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Toggle("Анимации", isOn: $theme.animations)
+                Toggle("Пульсация у работающих агентов", isOn: $theme.pulse).disabled(!theme.animations)
+                Button("Сбросить расположение всех панелей") {
+                    ThemeStore.animate { LayoutStore.shared.resetAll() }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    func swatch(_ p: ThemePreset) -> some View {
+        let pal = p.palette
+        let bg = Color(hex: pal.bg) ?? Color(nsColor: .windowBackgroundColor)
+        let surface = Color(hex: pal.surface) ?? Color(nsColor: .controlBackgroundColor)
+        let accent = Color(hex: pal.accent) ?? .accentColor
+        let selected = theme.preset == p
+        return Button {
+            ThemeStore.animate { theme.preset = p }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 8).fill(bg)
+                    VStack(alignment: .leading, spacing: 4) {
+                        RoundedRectangle(cornerRadius: 3).fill(accent).frame(width: 36, height: 6)
+                        RoundedRectangle(cornerRadius: 4).fill(surface).frame(height: 16)
+                        HStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 4).fill(surface).frame(height: 14)
+                            RoundedRectangle(cornerRadius: 4).fill(surface).frame(height: 14)
+                        }
+                    }
+                    .padding(8)
+                }
+                .frame(height: 64)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? theme.accent : Color.primary.opacity(0.15), lineWidth: selected ? 2.5 : 1))
+                Text(p.label).font(.caption.weight(selected ? .semibold : .regular))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(selected ? 1.03 : 1)
+        .animation(theme.anim(), value: selected)
     }
 }
 
@@ -324,5 +409,9 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 400)
+        .tint(ThemeStore.shared.accent)
+        .preferredColorScheme(ThemeStore.shared.colorScheme)
+        .animation(ThemeStore.shared.anim(), value: store.pending.count)
+        .animation(ThemeStore.shared.anim(), value: store.activeAgents().map(\.id))
     }
 }

@@ -13,6 +13,7 @@ struct AgentCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: agent.toolIcon).foregroundStyle(.secondary)
+                        .symbolEffect(.pulse, isActive: st == .working && ThemeStore.shared.animations)
                     Text(agent.name).font(.headline)
                     Pill(text: agent.toolLabel)
                     Spacer()
@@ -90,11 +91,13 @@ struct AgentsGrid: View {
                 }
                 .frame(maxWidth: .infinity).padding(40)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12, alignment: .top)], spacing: 12) {
                     ForEach(list) { a in
                         AgentCard(agent: a, showProject: showProject,
                                   onOpen: { detail = a },
                                   onMessage: { messageTo = MessageTarget(projectId: a.projectId, agent: a.id) })
+                            .hoverLift()
+                            .transition(.scale(scale: 0.92).combined(with: .opacity))
                     }
                 }
             }

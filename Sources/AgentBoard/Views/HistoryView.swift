@@ -90,10 +90,10 @@ struct HistoryView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(Fmt.dayHuman.string(from: day).capitalized).font(.title.bold())
             HStack(spacing: 12) {
-                StatTile(title: "Агентов", value: "\(history.agents.count)", icon: "person.2", color: .green)
-                StatTile(title: "Запросов", value: "\(ev.filter { $0.kind == "prompt" }.count)", icon: "text.bubble", color: .blue)
-                StatTile(title: "Коммитов", value: "\(ev.filter { $0.kind == "commit" }.count)", icon: "checkmark.seal", color: .purple)
-                StatTile(title: "Задач закрыто", value: "\(history.tasksDone.count)", icon: "checklist.checked", color: .orange)
+                StatTile(title: "Агентов", value: history.agents.count, icon: "person.2", color: .green)
+                StatTile(title: "Запросов", value: ev.filter { $0.kind == "prompt" }.count, icon: "text.bubble", color: .blue)
+                StatTile(title: "Коммитов", value: ev.filter { $0.kind == "commit" }.count, icon: "checkmark.seal", color: .purple)
+                StatTile(title: "Задач закрыто", value: history.tasksDone.count, icon: "checklist.checked", color: .orange)
             }
             if let s = store.summaries.first(where: { $0.day == dayKey }) {
                 DisclosureGroup("Сводка дня") { MarkdownView(text: s.markdown).padding(.top, 8) }
