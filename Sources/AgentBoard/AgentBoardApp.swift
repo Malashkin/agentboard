@@ -6,6 +6,30 @@ struct AgentBoardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = Store.shared
 
+    init() {
+        // CLI mode: `AgentBoard --install-claude [--install-codex]` runs the same installers as the "Подключения" screen.
+        let args = CommandLine.arguments
+        if args.contains("--install-claude") || args.contains("--install-codex") || args.contains("--uninstall-claude") {
+            Pref.registerDefaults()
+            Integrations.writeBridge()
+            func step(_ name: String, _ work: () throws -> Void) {
+                do { try work(); print("✓ \(name)") } catch { print("✗ \(name): \(error.localizedDescription)") }
+            }
+            if args.contains("--uninstall-claude") {
+                step("Claude Code hooks removed") { try Integrations.uninstallClaudeHooks() }
+                step("Claude Code MCP removed") { Integrations.uninstallClaudeMCP() }
+            }
+            if args.contains("--install-claude") {
+                step("Claude Code hooks → ~/.claude/settings.json") { try Integrations.installClaudeHooks() }
+                step("Claude Code MCP agentboard → \(Integrations.mcpURL)") { try Integrations.installClaudeMCP() }
+            }
+            if args.contains("--install-codex") {
+                step("Codex → ~/.codex/config.toml") { try Integrations.installCodex() }
+            }
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         Window("AgentBoard", id: "main") {
             MainView()
