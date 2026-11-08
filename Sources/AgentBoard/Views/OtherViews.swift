@@ -393,7 +393,7 @@ struct MenuBarView: View {
                         Spacer()
                         Text(Fmt.rel(a.lastSeen, now: store.now)).font(.caption2).foregroundStyle(.secondary)
                     }
-                }
+                }.feedRowTransition()
             }
             Divider()
             HStack {

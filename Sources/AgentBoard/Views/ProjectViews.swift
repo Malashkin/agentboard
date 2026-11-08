@@ -137,7 +137,7 @@ struct FeedList: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(items) { e in
                     VStack(spacing: 0) { row(e); Divider() }
-                        .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+                        .feedRowTransition()
                 }
             }
         }
@@ -208,7 +208,7 @@ struct GitView: View {
                                 if w.behind > 0 { Pill(text: "↓\(w.behind)", color: .gray) }
                                 if let owner { Pill(text: owner.name, color: .green, icon: "person") }
                                 Spacer()
-                                Text(w.changes.isEmpty ? "чисто" : "\(w.changes.count) незакоммиченных")
+                                Text(w.changes.isEmpty ? "чисто" : "\(w.changes.count) незакоммиченных").smoothNumber(w.changes.count)
                                     .font(.caption).foregroundStyle(w.changes.isEmpty ? Color.secondary : Color.orange)
                             }
                             Text(w.path).font(.caption).foregroundStyle(.secondary)
@@ -232,7 +232,7 @@ struct GitView: View {
                         Text(c.author).font(.caption).foregroundStyle(.secondary)
                     }
                     Divider()
-                }
+                }.feedRowTransition()
             }
             .padding(20)
         }
@@ -284,6 +284,17 @@ struct ProjectSettingsView: View {
                     }
                 }
                 Text("Нужно для Codex и других агентов без хуков: объясняет им, как пользоваться доской. Claude Code получает правила автоматически.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("История") {
+                LabeledContent("Прошлые сессии и коммиты") {
+                    if store.importing.contains(project.id) {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Загрузить") { store.importHistory(project) }
+                    }
+                }
+                Text(store.importReport[project.id] ?? "Сессии Claude Code и Codex и коммиты за последние 60 дней, сделанные до подключения проекта. Повторная загрузка не создаёт дублей.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Агенты") {

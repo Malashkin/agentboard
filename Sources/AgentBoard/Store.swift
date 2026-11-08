@@ -22,6 +22,9 @@ final class Store: ObservableObject {
     @Published var now = Date()
     @Published var openMainTick = 0
     @Published var lastError: String?
+    @Published var importing: Set<String> = []
+    @Published var lastWork: [String: Double] = [:]
+    @Published var importReport: [String: String] = [:]
 
     private var reloadScheduled = false
     private var ticker: AnyCancellable?
@@ -36,7 +39,7 @@ final class Store: ObservableObject {
         DispatchQueue.main.async {
             guard !self.reloadScheduled else { return }
             self.reloadScheduled = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self.reload() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.reload() }
         }
     }
 
@@ -50,16 +53,20 @@ final class Store: ObservableObject {
         }
     }
 
+    /// Only publishes what actually changed: re-assigning equal arrays made SwiftUI redraw
+    /// (and re-run transitions in) the feed and agent cards on every hook event — visible as flicker.
     private func apply(_ s: Core.Snapshot) {
-        projects = s.projects
-        agents = s.agents
-        tasks = s.tasks
-        events = s.events
-        files = s.files
-        summaries = s.summaries
-        pending = s.pending
-        messages = s.messages
+        if projects != s.projects { projects = s.projects }
+        if agents != s.agents { agents = s.agents }
+        if tasks != s.tasks { tasks = s.tasks }
+        if events != s.events { events = s.events }
+        if files != s.files { files = s.files }
+        if summaries != s.summaries { summaries = s.summaries }
+        if pending != s.pending { pending = s.pending }
+        if messages != s.messages { messages = s.messages }
+        if lastWork != s.lastWork { lastWork = s.lastWork }
     }
+
 
     func requestOpenMain() { openMainTick += 1 }
 
@@ -119,6 +126,21 @@ final class Store: ObservableObject {
         Core.shared.q.async { work(Core.shared) }
     }
 
+    /// Pulls in sessions and commits that happened before the project was added.
+    func importHistory(_ p: Project) {
+        guard !importing.contains(p.id) else { return }
+        importing.insert(p.id)
+        DispatchQueue.global(qos: .utility).async {
+            let r = HistoryImporter.run(project: p)
+            DispatchQueue.main.async {
+                self.importing.remove(p.id)
+                self.importReport[p.id] = r.sessions + r.commits == 0 ? "Новых данных не найдено"
+                    : "Загружено: сессий \(r.sessions), событий \(r.events), коммитов \(r.commits)"
+                self.reload()
+            }
+        }
+    }
+
     func addProject(path: String, completion: @escaping (String?) -> Void) {
         core { c in
             let r = c.addProject(path: path)
@@ -127,6 +149,7 @@ final class Store: ObservableObject {
                 case .success(let p):
                     completion(nil)
                     GitMonitor.shared.refreshNow()
+                    self.importHistory(p)
                     // Commits from any agent (incl. Codex) are caught by a git hook.
                     DispatchQueue.global().async { try? Integrations.installGitHook(p) }
                 case .failure(let e): completion(e.message)

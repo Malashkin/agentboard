@@ -74,6 +74,7 @@ final class Core {
           id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, agent_id TEXT, kind TEXT, title TEXT,
           detail TEXT DEFAULT '', client TEXT DEFAULT '', ref TEXT DEFAULT '', created_at REAL);
         CREATE INDEX IF NOT EXISTS events_time ON events(created_at);
+        CREATE INDEX IF NOT EXISTS events_project_time ON events(project_id, created_at);
         CREATE TABLE IF NOT EXISTS file_touches(
           agent_id TEXT, project_id TEXT, path TEXT, count INTEGER DEFAULT 0, last_at REAL,
           PRIMARY KEY(agent_id, path));
@@ -85,6 +86,7 @@ final class Core {
           id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT, markdown TEXT, source TEXT DEFAULT '', created_at REAL);
         """)
         let cols = Set(db.query("PRAGMA table_info(agents)").map { $0.s("name") })
+        HistoryImporter.ensureSchema(self)
         if !cols.contains("tty") { db.exec("ALTER TABLE agents ADD COLUMN tty TEXT DEFAULT ''") }
     }
 
@@ -101,6 +103,7 @@ final class Core {
         var summaries: [SummaryItem]
         var pending: [PendingCommit]
         var messages: [MessageItem]
+        var lastWork: [String: Double]
     }
 
     func snapshot() -> Snapshot {
@@ -111,14 +114,18 @@ final class Core {
                              [weekAgo]).map(Agent.init),
             tasks: db.query("SELECT * FROM tasks WHERE status != 'done' OR done_at > ? ORDER BY updated_at DESC",
                             [now() - 30 * 86400]).map(TaskItem.init),
-            events: db.query("SELECT * FROM events WHERE created_at > ? ORDER BY id DESC LIMIT 3000",
+            events: db.query("SELECT * FROM events WHERE created_at > ? ORDER BY created_at DESC, id DESC LIMIT 3000",
                              [weekAgo]).map(EventItem.init),
             files: db.query("SELECT * FROM file_touches WHERE last_at > ? ORDER BY last_at DESC",
                             [now() - 2 * 86400]).map(FileTouch.init),
             summaries: db.query("SELECT * FROM summaries ORDER BY day DESC, id DESC LIMIT 400").map(SummaryItem.init),
             pending: pending.values.map(\.commit).sorted { $0.createdAt < $1.createdAt },
             messages: db.query("SELECT * FROM messages WHERE created_at > ? ORDER BY id DESC LIMIT 500",
-                               [weekAgo]).map(MessageItem.init)
+                               [weekAgo]).map(MessageItem.init),
+            lastWork: Dictionary(uniqueKeysWithValues: db.query("""
+                SELECT project_id, MAX(created_at) AS t FROM events
+                WHERE kind IN ('prompt','action','commit','turn_done') GROUP BY project_id
+                """).map { ($0.s("project_id"), $0.d("t")) })
         )
     }
 
@@ -200,6 +207,7 @@ final class Core {
             db.query("DELETE FROM \(t) WHERE project_id=?", [id])
         }
         db.query("DELETE FROM projects WHERE id=?", [id])
+        db.query("DELETE FROM imported_sessions WHERE project_id=?", [id])
         cwdCache.removeAll()
         changed()
     }
@@ -298,7 +306,11 @@ final class Core {
     }
 
     func purgeEndedAgents(project: String) {
-        db.query("DELETE FROM agents WHERE project_id=? AND (status='ended' OR last_seen < ?)",
+        // Agents with recorded work are kept: the history needs their names.
+        db.query("""
+            DELETE FROM agents WHERE project_id=? AND (status='ended' OR last_seen < ?)
+              AND id NOT IN (SELECT agent_id FROM events WHERE agent_id IS NOT NULL AND kind IN ('prompt','action','commit'))
+            """,
                  [project, now() - AppSettings.staleMinutes * 60])
         changed()
     }
@@ -404,7 +416,7 @@ final class Core {
         if !files.isEmpty {
             out.append("Файлы, которые он менял: " + files.map { "\($0.s("path")) (×\($0.i("count")), \(Fmt.time($0.d("last_at"))))" }.joined(separator: ", "))
         }
-        let events = db.query("SELECT * FROM events WHERE agent_id=? ORDER BY id DESC LIMIT ?", [a.id, limit]).map(EventItem.init)
+        let events = db.query("SELECT * FROM events WHERE agent_id=? ORDER BY created_at DESC, id DESC LIMIT ?", [a.id, limit]).map(EventItem.init)
         if !events.isEmpty {
             out.append("Хронология (новые сверху):")
             for e in events {
@@ -413,7 +425,7 @@ final class Core {
                 out.append(line)
             }
         }
-        let answer = db.query("SELECT detail FROM events WHERE agent_id=? AND kind='turn_done' AND detail != '' ORDER BY id DESC LIMIT 1", [a.id])
+        let answer = db.query("SELECT detail FROM events WHERE agent_id=? AND kind='turn_done' AND detail != '' ORDER BY created_at DESC, id DESC LIMIT 1", [a.id])
         if let d = answer.first?.s("detail") { out.append("Его последний ответ:\n\(d.trunc(2000))") }
         return out.joined(separator: "\n")
     }
@@ -531,7 +543,7 @@ final class Core {
                 out.append("- #\(t.id) [\(t.status.label), \(who)\(client)] \(t.title.trunc(120))")
             }
         }
-        let notes = db.query("SELECT * FROM events WHERE project_id=? AND kind IN ('note','commit') AND created_at > ? ORDER BY id DESC LIMIT 6",
+        let notes = db.query("SELECT * FROM events WHERE project_id=? AND kind IN ('note','commit') AND created_at > ? ORDER BY created_at DESC, id DESC LIMIT 6",
                              [p.id, now() - 6 * 3600]).map(EventItem.init)
         if !notes.isEmpty {
             out.append("Недавно:")

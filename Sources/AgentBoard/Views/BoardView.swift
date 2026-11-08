@@ -44,7 +44,7 @@ struct BoardView: View {
             HStack {
                 Circle().fill(st.color).frame(width: 8, height: 8)
                 Text(st.label).font(.headline)
-                Text("\(list.count)").foregroundStyle(.secondary)
+                Text("\(list.count)").foregroundStyle(.secondary).smoothNumber(list.count, Double(list.count))
                 Spacer()
             }
             ScrollView {
@@ -60,7 +60,7 @@ struct BoardView: View {
                                 Divider()
                                 Button("Удалить", role: .destructive) { store.deleteTask(t.id) }
                             }
-                    }
+                    }.feedRowTransition()
                 }
             }
         }

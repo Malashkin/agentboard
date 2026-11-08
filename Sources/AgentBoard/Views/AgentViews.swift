@@ -32,9 +32,10 @@ struct AgentCard: View {
                 if !agent.focus.isEmpty {
                     Label(agent.focus, systemImage: "scope").font(.callout).lineLimit(2)
                 }
-                if !agent.lastPrompt.isEmpty {
-                    Text("«\(agent.lastPrompt.oneLine)»").font(.callout).foregroundStyle(.secondary).lineLimit(3)
-                }
+                // Fixed height, so a new prompt doesn't resize the card and reflow the grid.
+                Text(agent.lastPrompt.isEmpty ? " " : "«\(agent.lastPrompt.oneLine)»").font(.callout).foregroundStyle(.secondary)
+                    .lineLimit(3, reservesSpace: true)
+                    .contentTransition(.opacity)
                 let files = store.files(of: agent.id).prefix(4).map(\.path)
                 if !files.isEmpty {
                     Text(files.joined(separator: " · ")).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -67,8 +68,8 @@ struct AgentsGrid: View {
     var list: [Agent] {
         let all = projectId.map { store.agents(in: $0) } ?? store.agents
         let filtered = showEnded ? all : all.filter { $0.isActive(staleMinutes: store.staleMinutes, at: store.now) }
-        let order: [AgentStatus: Int] = [.waiting: 0, .working: 1, .idle: 2, .stale: 3, .ended: 4]
-        return filtered.sorted { (order[store.status($0)] ?? 9, -$0.lastSeen) < (order[store.status($1)] ?? 9, -$1.lastSeen) }
+        // Stable order (by session start): cards must not jump around while agents work.
+        return filtered.sorted { ($0.startedAt, $0.id) < ($1.startedAt, $1.id) }
     }
 
     var body: some View {
@@ -224,7 +225,7 @@ struct AgentDetailSheet: View {
                                     HStack {
                                         Text(f.path).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
                                         Spacer()
-                                        Text("×\(f.count)").font(.caption).foregroundStyle(.secondary)
+                                        Text("×\(f.count)").font(.caption).foregroundStyle(.secondary).smoothNumber(f.count, Double(f.count))
                                     }
                                 }
                             }.frame(maxWidth: .infinity, alignment: .leading)

@@ -166,3 +166,16 @@ func copyToPasteboard(_ s: String) {
 func revealInFinder(_ path: String) {
     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
 }
+
+extension View {
+    /// Digits roll to the new value instead of jumping.
+    func smoothNumber<V: Hashable>(_ value: V, _ numeric: Double? = nil) -> some View {
+        self.contentTransition(numeric.map { .numericText(value: $0) } ?? .numericText())
+            .animation(ThemeStore.shared.anim(), value: value)
+    }
+
+    /// New rows slide in from the top and fade; removed rows fade out.
+    func feedRowTransition() -> some View {
+        transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+    }
+}

@@ -24,7 +24,17 @@ struct MainView: View {
                 Section("Проекты") {
                     ForEach(store.orderedProjects) { p in
                         HStack {
-                            Label(p.name, systemImage: "folder")
+                            Label {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(p.name)
+                                    if store.importing.contains(p.id) {
+                                        Text("загружаю историю…").font(.caption2).foregroundStyle(.secondary)
+                                    } else if let t = store.lastWork[p.id] {
+                                        Text(Self.lastWorkLabel(t, now: store.now)).font(.caption2).foregroundStyle(.secondary)
+                                            .help("Последняя работа агентов: " + Fmt.dayHuman.string(from: Date(timeIntervalSince1970: t)) + ", " + Fmt.time(t))
+                                    }
+                                }
+                            } icon: { Image(systemName: "folder") }
                             Spacer()
                             let active = store.activeAgents(in: p.id)
                             let waiting = active.filter { store.status($0) == .waiting }.count
@@ -32,7 +42,7 @@ struct MainView: View {
                                 Image(systemName: "hand.raised.fill").foregroundStyle(.orange).font(.caption)
                             }
                             if !active.isEmpty {
-                                Text("\(active.count)").font(.caption.monospacedDigit())
+                                Text("\(active.count)").font(.caption.monospacedDigit()).smoothNumber(active.count, Double(active.count))
                                     .padding(.horizontal, 6).padding(.vertical, 1)
                                     .background(Color.green.opacity(0.2), in: Capsule())
                             }
@@ -93,6 +103,17 @@ struct MainView: View {
         if case .overview = selection ?? .overview { return true }
         if case .project = selection, UserDefaults.standard.integer(forKey: "projectTab") == 0 { return true }
         return false
+    }
+
+    static func lastWorkLabel(_ t: Double, now: Date) -> String {
+        let d = Date(timeIntervalSince1970: t)
+        let cal = Calendar.current
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        if cal.isDateInToday(d) { f.dateFormat = "HH:mm"; return "сегодня, " + f.string(from: d) }
+        if cal.isDateInYesterday(d) { f.dateFormat = "HH:mm"; return "вчера, " + f.string(from: d) }
+        f.dateFormat = cal.isDate(d, equalTo: now, toGranularity: .year) ? "d MMM" : "d MMM yyyy"
+        return f.string(from: d)
     }
 
     func addProject() {

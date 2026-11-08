@@ -153,6 +153,7 @@ struct HistoryView: View {
                     }
                 }
                 .font(.caption).foregroundStyle(.secondary)
+                .smoothNumber(all.count)
                 Button(isOpen ? "Свернуть" : "Показать хронологию (\(shown.count))") {
                     if isOpen { expanded.remove(a.id) } else { expanded.insert(a.id) }
                 }
@@ -175,7 +176,7 @@ struct HistoryView: View {
                         }
                     }
                 }
-            }
+            }.feedRowTransition()
         }
     }
 
@@ -196,7 +197,7 @@ struct HistoryView: View {
     func reload() {
         Core.shared.q.async {
             let d = Core.shared.activeDays()
-            DispatchQueue.main.async { days = d }
+            DispatchQueue.main.async { ThemeStore.animate { days = d } }
         }
         load()
     }
@@ -207,7 +208,7 @@ struct HistoryView: View {
         let pid = projectId.isEmpty ? nil : projectId
         Core.shared.q.async {
             let h = Core.shared.history(from: from, to: to, project: pid)
-            DispatchQueue.main.async { history = h; loading = false }
+            DispatchQueue.main.async { ThemeStore.animate { history = h }; loading = false }
         }
     }
 }

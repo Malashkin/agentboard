@@ -354,7 +354,7 @@ struct WidgetContent: View {
                         if projectId == nil { Text(p.name).font(.caption).foregroundStyle(.secondary) }
                         if let n = store.agentName(agent) { Pill(text: n, color: .green) }
                     }
-                }
+                }.feedRowTransition()
             }
         }
     }
@@ -375,7 +375,7 @@ struct WidgetContent: View {
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }
-                }
+                }.feedRowTransition()
             }
         }
     }
@@ -396,9 +396,9 @@ struct WidgetContent: View {
                         Text(f.path).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
                         Spacer()
                         Text(f.agents.compactMap { store.agentName($0) }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
-                        Text("×\(f.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text("×\(f.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary).smoothNumber(f.count, Double(f.count))
                     }
-                }
+                }.feedRowTransition()
             }
         }
     }

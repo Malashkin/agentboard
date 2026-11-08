@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Integrations.writeBridge()
         startServer()
 
-        GitMonitor.shared.onUpdate = { snap in store.git = snap }
+        GitMonitor.shared.onUpdate = { snap in if store.git != snap { ThemeStore.animate { store.git = snap } } }
         GitMonitor.shared.start()
         CodexWatcher.shared.start()
 
@@ -91,6 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
             }
         }
+
+        // Catch up on sessions that ran while the app was closed (each session is imported once).
+        if !Self.isTesting { for p in core.q.sync(execute: { core.allProjects() }) { store.importHistory(p) } }
 
         summaryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in Self.maybeAutoSummary() }
     }
