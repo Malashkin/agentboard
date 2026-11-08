@@ -154,11 +154,17 @@ enum HistoryImporter {
         let key = p.path.map { $0 == "/" || $0 == "." || $0 == "_" ? "-" : String($0) }.joined()
         guard let dirs = try? fm.contentsOfDirectory(atPath: claudeRoot) else { return [] }
         var out: [String] = []
-        for d in dirs where d == key || d.hasPrefix(key + "-") || (d.count > 1 && key.hasPrefix(d + "-")) {
+        let needles = p.spellings.map { Data($0.utf8) }
+        for d in dirs {
+            let own = d == key || d.hasPrefix(key + "-")
             let dir = claudeRoot + "/" + d
             for n in (try? fm.contentsOfDirectory(atPath: dir)) ?? [] where n.hasSuffix(".jsonl") {
                 let f = dir + "/" + n
-                if modified(f) > since { out.append(f) }
+                guard modified(f) > since else { continue }
+                if own { out.append(f); continue }
+                // Sessions started in other folders: cheap byte search before parsing.
+                guard let data = FileManager.default.contents(atPath: f) else { continue }
+                if needles.contains(where: { data.range(of: $0) != nil }) { out.append(f) }
             }
         }
         return out
@@ -237,7 +243,7 @@ enum HistoryImporter {
                         if d.title == lastTitle { continue }
                         lastTitle = d.title
                         uses += 1
-                        if jsonString(b["input"] as? JSON ?? [:]).contains(p.path) { refs += 1 }
+                        if p.isMentioned(in: jsonString(b["input"] as? JSON ?? [:])) { refs += 1 }
                         entries.append(Entry(at: at, kind: "action", title: d.title, detail: d.detail, ref: d.file))
                     }
                 }
@@ -246,9 +252,10 @@ enum HistoryImporter {
         }
         flush()
         // A session started in a parent folder (e.g. ~) counts when it mostly works on this project.
-        let fromParent = !cwd.isEmpty && p.path.hasPrefix(cwd == "/" ? "/" : cwd + "/") && refs >= 5 && refs * 4 >= uses
-        guard inProject(cwd, p) || fromParent else { return }
-        if fromParent { cwd = p.path }
+        // Started elsewhere (e.g. ~/Desktop) but mostly worked on this project.
+        let byFiles = !inProject(cwd, p) && refs >= 5 && refs * 5 >= uses
+        guard inProject(cwd, p) || byFiles else { return }
+        if byFiles { cwd = p.path }
         store(tool: "claude", sessionId: sessionId, cwd: cwd, branch: branch, transcript: path, entries: entries, project: p, into: &r)
     }
 

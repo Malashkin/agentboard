@@ -87,6 +87,8 @@ final class Core {
         """)
         let cols = Set(db.query("PRAGMA table_info(agents)").map { $0.s("name") })
         HistoryImporter.ensureSchema(self)
+        let pcols = Set(db.query("PRAGMA table_info(projects)").map { $0.s("name") })
+        if !pcols.contains("aliases") { db.exec("ALTER TABLE projects ADD COLUMN aliases TEXT DEFAULT ''") }
         if !cols.contains("tty") { db.exec("ALTER TABLE agents ADD COLUMN tty TEXT DEFAULT ''") }
     }
 
@@ -590,7 +592,17 @@ final class Core {
     func handleClaudeHook(_ j: JSON, reply: @escaping (Data?) -> Void) {
         guard let event = j.str("hook_event_name"), let sid = j.str("session_id") else { reply(nil); return }
         let cwd = j.s("cwd")
-        guard let project = projectFor(cwd: cwd) else { reply(nil); return }
+        // Started inside a project folder, or already known, or (started elsewhere, e.g. ~/Desktop)
+        // its tool call works on files of a project.
+        var found = projectFor(cwd: cwd)
+        if found == nil, let pid = db.query("SELECT project_id FROM agents WHERE tool='claude' AND session_id=?", [sid]).first?.s("project_id") {
+            found = project(id: pid)
+        }
+        if found == nil, let input = j["tool_input"] as? JSON {
+            let text = jsonString(input)
+            found = allProjects().filter { $0.isMentioned(in: text) }.max { $0.path.count < $1.path.count }
+        }
+        guard let project = found else { reply(nil); return }
         let agent = touchAgent(tool: "claude", sessionId: sid, project: project, cwd: cwd,
                                transcript: j.str("transcript_path"), revive: event != "SessionEnd")
         if let tty = j.str("_tty"), tty != agent.tty { setAgent(agent.id, ["tty": tty]) }

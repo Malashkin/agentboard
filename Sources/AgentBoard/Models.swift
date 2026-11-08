@@ -8,10 +8,33 @@ struct Project: Identifiable, Hashable {
     var commonDir: String
     var client: String
     var createdAt: Double
+    /// Former locations (the folder was moved or renamed); old sessions still mention them.
+    var aliases: [String]
 
     init(_ r: Row) {
+        aliases = r.s("aliases").split(separator: "\n").map(String.init).filter { !$0.isEmpty }
         id = r.s("id"); name = r.s("name"); path = r.s("path")
         commonDir = r.s("common_dir"); client = r.s("client"); createdAt = r.d("created_at")
+    }
+
+    /// Every way a tool call can spell this project's location: absolute and `~/…`, current and former.
+    var spellings: [String] {
+        let home = NSHomeDirectory()
+        return ([path] + aliases).flatMap { p -> [String] in
+            p.hasPrefix(home + "/") ? [p, "~" + p.dropFirst(home.count)] : [p]
+        }
+    }
+
+    func isMentioned(in text: String) -> Bool {
+        spellings.contains { s in
+            var r = text.startIndex..<text.endIndex
+            while let f = text.range(of: s, range: r) {
+                let next = f.upperBound < text.endIndex ? text[f.upperBound] : " "
+                if !(next.isLetter || next.isNumber || next == "-" || next == "_" || next == ".") || next == "/" { return true }
+                r = f.upperBound..<text.endIndex
+            }
+            return false
+        }
     }
 }
 
