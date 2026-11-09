@@ -11,7 +11,9 @@ extension Core {
     • claim_task / create_task(claim=true) — возьми задачу перед работой; update_task — статус и итог.
     • set_focus(focus, files) — объяви, над чем работаешь и какие файлы трогаешь.
     • send_message(to, text) — написать другому агенту или всем (to="all"); post_note — заметка в ленту для человека.
-    • who_touches(path) — кто недавно менял файл.
+    • reserve_files(paths, minutes, reason) / release_files(paths) — бронь файлов перед правкой: \
+    другие агенты не смогут их править и коммитить, пока бронь действует.
+    • who_touches(path) — кто недавно менял файл и кто его забронировал.
     Claude Code определяется автоматически. Другие клиенты (Codex и т.п.) сначала вызывают register_agent(cwd) \
     и передают полученный agent_id во все вызовы.
     """
@@ -57,7 +59,14 @@ extension Core {
                  ["to": prop("string", "Имя агента, его agent_id или \"all\""), "text": prop("string", "Текст сообщения")], ["to", "text"]),
             tool("post_note", "Заметка в ленту проекта для человека и других агентов (решение, предупреждение, итог).",
                  ["text": prop("string", "Текст заметки"), "client": prop("string", "Клиент, если заметка о нём")], ["text"]),
-            tool("who_touches", "Кто из агентов недавно менял файл.", ["path": prop("string", "Путь файла")], ["path"], readOnly: true),
+            tool("who_touches", "Кто из агентов недавно менял файл и есть ли на нём бронь.", ["path": prop("string", "Путь файла")], ["path"], readOnly: true),
+            tool("reserve_files", "Забронировать файлы, папки или маски (src/auth/, *.sql, src/**/*.ts) перед правкой. Пока бронь действует, другие агенты не смогут их править и коммитить. Повторный вызов продлевает бронь.",
+                 ["paths": ["type": "array", "items": ["type": "string"], "description": "Пути относительно корня репозитория, папки или маски"],
+                  "minutes": prop("integer", "На сколько минут (по умолчанию из настроек, обычно 30)"),
+                  "exclusive": prop("boolean", "true (по умолчанию) — только ты; false — общая бронь, просто предупреждение"),
+                  "reason": prop("string", "Зачем, коротко — увидят другие агенты и человек")], ["paths"]),
+            tool("release_files", "Снять свои брони. Без paths — все.",
+                 ["paths": ["type": "array", "items": ["type": "string"], "description": "Какие брони снять"]]),
             tool("register_agent", "Зарегистрироваться на панели (для клиентов без хуков, например Codex). Вернёт agent_id.",
                  ["cwd": prop("string", "Абсолютный путь текущей рабочей папки"),
                   "tool": prop("string", "codex, cursor, …"), "name": prop("string", "Желаемое имя")], ["cwd"]),
@@ -256,16 +265,40 @@ extension Core {
                      title: "\(me?.name ?? "Агент"): \(text.oneLine.trunc(200))", detail: text, client: args.s("client"))
             return done("Заметка добавлена в ленту.")
 
+        case "reserve_files":
+            guard let me else { return done("Не знаю, кто ты. Передай agent_id (register_agent).", true) }
+            let paths = (args["paths"] as? [String]) ?? args.str("paths").map { [$0] } ?? []
+            guard !paths.isEmpty else { return done("Нужен paths", true) }
+            let minutes = Double(args.oi("minutes") ?? Int64(AppSettings.reservationMinutes))
+            let r = reserve(agent: me, patterns: paths, minutes: max(1, min(minutes, 480)),
+                            exclusive: args["exclusive"] as? Bool ?? true, reason: args.s("reason"))
+            var lines: [String] = []
+            if !r.granted.isEmpty { lines.append("Забронировано до \(Fmt.time(now() + minutes * 60)): \(r.granted.joined(separator: ", "))") }
+            for (pat, res) in r.blocked {
+                lines.append("Не удалось: \(pat) — уже у \(agent(id: res.agentId)?.name ?? res.agentId) до \(Fmt.time(res.expiresAt))\(res.reason.isEmpty ? "" : " («\(res.reason)»)"). Договорись через send_message.")
+            }
+            return done(lines.joined(separator: "\n"), r.granted.isEmpty)
+
+        case "release_files":
+            guard let me else { return done("Не знаю, кто ты. Передай agent_id (register_agent).", true) }
+            let p = project
+            let paths = (args["paths"] as? [String])?.map { Self.normalizePattern($0, agent: me, project: p) }
+            let n = releaseReservations(agentId: me.id, patterns: paths)
+            if n > 0 { addEvent(project: project.id, agent: me.id, kind: "reservation", title: "\(me.name) снял брони (\(n))") }
+            return done(n == 0 ? "Активных броней не найдено." : "Снято броней: \(n).")
+
         case "who_touches":
             let path = args.s("path")
             let rel = me.map { relativePath(path, agent: $0, project: project) } ?? path
+            let held = activeReservations(project: project.id).filter { Self.patternsOverlap($0.pattern, rel) }
+            let heldText = held.map { "🔒 забронирован: \(agent(id: $0.agentId)?.name ?? $0.agentId) до \(Fmt.time($0.expiresAt))\($0.reason.isEmpty ? "" : " («\($0.reason)»)")" }
             let rows = db.query("SELECT * FROM file_touches WHERE project_id=? AND (path=? OR path LIKE ?) ORDER BY last_at DESC LIMIT 10",
                                 [project.id, rel, "%" + rel]).map(FileTouch.init)
-            if rows.isEmpty { return done("Никто из агентов не трогал \(rel) за последнее время.") }
-            return done(rows.map { f in
+            if rows.isEmpty { return done((heldText + ["Никто из агентов не трогал \(rel) за последнее время."]).joined(separator: "\n")) }
+            return done((heldText + rows.map { f in
                 let a = agent(id: f.agentId)
                 return "- \(a?.name ?? f.agentId) (\(a?.displayStatus(staleMinutes: AppSettings.staleMinutes).label ?? "?")): \(f.path), ×\(f.count), \(Fmt.rel(f.lastAt))"
-            }.joined(separator: "\n"))
+            }).joined(separator: "\n"))
 
         default:
             return done("Неизвестный инструмент \(name)", true)

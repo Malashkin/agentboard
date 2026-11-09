@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum WidgetKind: String, Codable, CaseIterable, Identifiable {
-    case stats, approvals, agents, feed, tasks, commits, clients, hotFiles, summary
+    case stats, approvals, agents, feed, tasks, commits, clients, hotFiles, summary, reservations
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -15,6 +15,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         case .clients: return "Клиенты сегодня"
         case .hotFiles: return "Горячие файлы"
         case .summary: return "Последняя сводка"
+        case .reservations: return "Брони файлов"
         }
     }
     var icon: String {
@@ -28,6 +29,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         case .clients: return "person.crop.square.filled.and.at.rectangle"
         case .hotFiles: return "flame"
         case .summary: return "doc.richtext"
+        case .reservations: return "lock.doc"
         }
     }
     var defaultWide: Bool { [.stats, .agents, .feed].contains(self) }
@@ -53,9 +55,13 @@ final class LayoutStore: ObservableObject {
 
     static func defaults(project: Bool) -> [WidgetConfig] {
         let kinds: [WidgetKind] = project
-            ? [.approvals, .stats, .agents, .tasks, .hotFiles, .feed, .commits]
+            ? [.approvals, .stats, .agents, .tasks, .reservations, .hotFiles, .feed, .commits]
             : [.approvals, .stats, .agents, .tasks, .commits, .feed, .clients, .summary]
-        return kinds.map { WidgetConfig(kind: $0, wide: $0.defaultWide) }
+        // Stable ids: the default layout is rebuilt on every redraw, and fresh random ids made SwiftUI
+        // recreate the whole dashboard each time (flicker, typed text and toggles lost).
+        return kinds.enumerated().map { i, k in
+            WidgetConfig(id: UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", i + 1))!, kind: k, wide: k.defaultWide)
+        }
     }
 
     func layout(_ key: String) -> [WidgetConfig] {
@@ -237,6 +243,7 @@ struct WidgetFrame<Content: View, Controls: View>: View {
         .padding(theme.density.padding + 2)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(SurfaceBackground(radius: theme.density.radius + 2))
+        .clipShape(RoundedRectangle(cornerRadius: theme.density.radius + 2))
         .rotationEffect(.degrees(editing && theme.animations ? (wiggle ? 0.25 : -0.25) : 0))
         .onChange(of: editing) { startWiggle() }
         .onAppear { startWiggle() }
@@ -280,12 +287,16 @@ struct WidgetContent: View {
         case .stats: stats
         case .approvals: approvals
         case .agents: AgentsGrid(projectId: projectId, showProject: projectId == nil)
-        case .feed: FeedList(projectId: projectId, limit: 40, showComposer: projectId != nil).frame(maxHeight: 520)
+        case .feed:
+            // Own scroll area: the widget has a fixed height and must never spill over its neighbours.
+            ScrollView { FeedList(projectId: projectId, limit: 60, showComposer: projectId != nil, lazy: false).padding(.trailing, 8) }
+                .frame(height: 520)
         case .tasks: tasks
         case .commits: commits
         case .clients: clients
         case .hotFiles: hotFiles
         case .summary: summary
+        case .reservations: reservationsList
         }
     }
 
@@ -293,7 +304,9 @@ struct WidgetContent: View {
 
     var stats: some View {
         let active = store.activeAgents(in: projectId)
-        let waiting = active.filter { store.status($0) == .waiting }.count + store.pending.filter { projectId == nil || $0.projectId == projectId }.count
+        let requests = store.pending.filter { projectId == nil || $0.projectId == projectId }
+        let withRequest = Set(requests.map(\.agentId))
+        let waiting = active.filter { store.status($0) == .waiting && !withRequest.contains($0.id) }.count + requests.count
         let commits = projectId.map { store.git[$0]?.todayCommits.count ?? 0 } ?? store.git.values.reduce(0) { $0 + $1.todayCommits.count }
         let done = store.tasks.filter { (projectId == nil || $0.projectId == projectId) && ($0.doneAt ?? 0) >= dayStart }.count
         let actions = store.events.filter { (projectId == nil || $0.projectId == projectId) && $0.createdAt >= dayStart && $0.kind == "action" }.count
@@ -309,7 +322,7 @@ struct WidgetContent: View {
     @ViewBuilder var approvals: some View {
         let list = store.pending.filter { projectId == nil || $0.projectId == projectId }
         if list.isEmpty {
-            Text("Нет коммитов, ожидающих одобрения").foregroundStyle(.secondary).font(.callout)
+            Text("Нет запросов, ожидающих решения").foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(spacing: 10) { ForEach(list) { ApprovalRow(item: $0) } }
         }
@@ -332,6 +345,7 @@ struct WidgetContent: View {
                     }
                     .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
+                .animateRows(list.prefix(12).map(\.id))
             }
         }
     }
@@ -355,6 +369,7 @@ struct WidgetContent: View {
                         if let n = store.agentName(agent) { Pill(text: n, color: .green) }
                     }
                 }.feedRowTransition()
+                .animateRows(pairs.map(\.1.hash))
             }
         }
     }
@@ -376,6 +391,31 @@ struct WidgetContent: View {
                         Spacer()
                     }
                 }.feedRowTransition()
+                .animateRows(names)
+            }
+        }
+    }
+
+    @ViewBuilder var reservationsList: some View {
+        let list = store.reservations.filter { projectId == nil || $0.projectId == projectId }
+        if list.isEmpty {
+            Text("Никто ничего не забронировал. Агенты бронируют файлы через reserve_files перед правкой.")
+                .foregroundStyle(.secondary).font(.callout)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(list) { r in
+                    HStack(spacing: 8) {
+                        Image(systemName: r.exclusive ? "lock.fill" : "lock.open").foregroundStyle(r.exclusive ? .orange : .secondary)
+                        Text(r.pattern).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                        if let a = store.agent(r.agentId) { Pill(text: a.name, color: .green, icon: a.toolIcon) }
+                        if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                        Spacer()
+                        Text("до \(Fmt.time(r.expiresAt))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }
+                            .buttonStyle(.borderless).help("Снять бронь (агенту придёт сообщение)")
+                    }
+                }.feedRowTransition()
+                .animateRows(list.map(\.id))
             }
         }
     }
@@ -399,6 +439,7 @@ struct WidgetContent: View {
                         Text("×\(f.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary).smoothNumber(f.count, Double(f.count))
                     }
                 }.feedRowTransition()
+                .animateRows(grouped.map(\.path))
             }
         }
     }

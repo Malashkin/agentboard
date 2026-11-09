@@ -22,13 +22,22 @@ enum Integrations {
         # stdin: hook JSON from Claude Code; stdout: optional hook response JSON.
         # The controlling terminal lets AgentBoard type comments into this session's tab.
         TTY=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
-        curl -sf --connect-timeout 1 --max-time 900 -X POST -H 'Content-Type: application/json' \\
+        curl -sf --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
           --data-binary @- "$URL/hook/claude?tty=$TTY" 2>/dev/null
         ;;
       codex)
         # Codex `notify` passes the event JSON as the last argument.
         printf '%s' "${@: -1}" | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
           -H 'Content-Type: application/json' --data-binary @- "$URL/hook/codex" >/dev/null 2>&1
+        ;;
+      git-pre-commit)
+        # Refuses a commit by an agent that touches files another agent has reserved.
+        top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+        files=$(git diff --cached --name-only 2>/dev/null)
+        [ -z "$files" ] && exit 0
+        resp=$( { printf '%s\n' "$top"; printf '%s\n' "$files"; } | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
+          -H 'Content-Type: text/plain' --data-binary @- "$URL/hook/git-precommit" 2>/dev/null)
+        if [ -n "$resp" ]; then printf '%s\n' "$resp" >&2; exit 1; fi
         ;;
       git-post-commit)
         top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
@@ -58,7 +67,11 @@ enum Integrations {
         [("SessionStart", nil, 10),
          ("UserPromptSubmit", nil, 10),
          ("PreToolUse", "*", Int(AppSettings.approvalTimeout) + 30),
+         ("PermissionRequest", "*", Int(AppSettings.permissionTimeout) + 30),
          ("PostToolUse", "*", 5),
+         ("PostToolUseFailure", "*", 5),
+         ("SubagentStart", nil, 5),
+         ("SubagentStop", nil, 5),
          ("Notification", nil, 10),
          ("Stop", nil, 10),
          ("SessionEnd", nil, 10)]
@@ -199,7 +212,8 @@ enum Integrations {
 
     static func gitHookInstalled(_ project: Project) -> Bool {
         guard let dir = gitHooksDir(project), let t = try? String(contentsOfFile: dir + "/post-commit") else { return false }
-        return t.contains(marker)
+        let pre = (try? String(contentsOfFile: dir + "/pre-commit")) ?? ""
+        return t.contains(marker) && pre.contains(marker)
     }
 
     static func installGitHook(_ project: Project) throws {
@@ -216,14 +230,31 @@ enum Integrations {
         }
         try text.write(toFile: path, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+
+        // pre-commit: right after the shebang, so an `exec` at the end of an existing hook can't skip it.
+        let prePath = dir + "/pre-commit"
+        let preLine = "\"\(hookPath)\" git-pre-commit || exit 1 # agentboard-hook"
+        var pre = (try? String(contentsOfFile: prePath)) ?? "#!/bin/sh\n"
+        if !pre.contains(marker) {
+            var lines = pre.components(separatedBy: "\n")
+            let at = lines.first?.hasPrefix("#!") == true ? 1 : 0
+            if at == 0 { lines.insert("#!/bin/sh", at: 0) }
+            lines.insert(preLine, at: 1)
+            pre = lines.joined(separator: "\n")
+            if !pre.hasSuffix("\n") { pre += "\n" }
+        }
+        try pre.write(toFile: prePath, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: prePath)
     }
 
     static func uninstallGitHook(_ project: Project) {
         guard let dir = gitHooksDir(project) else { return }
-        let path = dir + "/post-commit"
-        guard let text = try? String(contentsOfFile: path) else { return }
-        let kept = text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains(marker) }.joined(separator: "\n")
-        try? kept.write(toFile: path, atomically: true, encoding: .utf8)
+        for name in ["post-commit", "pre-commit"] {
+            let path = dir + "/" + name
+            guard let text = try? String(contentsOfFile: path) else { continue }
+            let kept = text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains(marker) }.joined(separator: "\n")
+            try? kept.write(toFile: path, atomically: true, encoding: .utf8)
+        }
     }
 
     // MARK: AGENTS.md (for Codex and other tools without hooks)

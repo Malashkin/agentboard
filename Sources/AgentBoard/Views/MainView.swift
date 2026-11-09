@@ -166,37 +166,141 @@ struct ApprovalRow: View {
     var compact = false
     @State private var comment = ""
     @State private var showStatus = false
+    @State private var picks: [String: Set<String>] = [:]
+    @State private var other: [String: String] = [:]
+
+    var icon: (String, Color) {
+        switch item.kind {
+        case "question": return ("questionmark.bubble.fill", .blue)
+        case "plan": return ("list.bullet.clipboard.fill", .teal)
+        case "permission": return ("lock.shield.fill", .orange)
+        default: return ("arrow.up.doc.fill", .purple)
+        }
+    }
+
+    var heading: String {
+        switch item.kind {
+        case "question": return "\(item.agentName) спрашивает · \(item.projectName)"
+        case "plan": return "\(item.agentName) предлагает план · \(item.projectName)"
+        case "permission": return "\(item.agentName) просит разрешение · \(item.projectName)"
+        default: return "\(item.agentName) хочет сделать коммит · \(item.projectName)"
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
-                Image(systemName: "arrow.up.doc.fill").foregroundStyle(.purple).font(.title3)
+                Image(systemName: icon.0).foregroundStyle(icon.1).font(.title3)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("\(item.agentName) хочет сделать коммит · \(item.projectName)").font(.headline)
-                    Text(item.command).font(.system(.caption, design: .monospaced)).lineLimit(compact ? 2 : 4)
-                        .textSelection(.enabled)
+                    Text(heading).font(.headline)
+                    if item.kind != "question" {
+                        Text(item.command).font(.system(.caption, design: .monospaced)).lineLimit(compact ? 2 : 4)
+                            .textSelection(.enabled)
+                    }
                     let left = max(0, Int(item.deadline - store.now.timeIntervalSince1970))
-                    Text("Без решения через \(left / 60):\(String(format: "%02d", left % 60)) вопрос уйдёт в терминал")
+                    Text(item.kind == "commit"
+                         ? "Без решения через \(left / 60):\(String(format: "%02d", left % 60)) вопрос уйдёт в терминал"
+                         : "Тот же вопрос открыт в терминале агента — ответить можно там или здесь")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            if !compact {
-                DisclosureGroup("Изменения (git status)", isExpanded: $showStatus) {
-                    ScrollView {
-                        Text(item.gitStatus.isEmpty ? "нет данных" : item.gitStatus)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }.frame(maxHeight: 160)
-                }.font(.caption)
-            }
-            HStack {
-                TextField("Комментарий агенту (необязательно)", text: $comment).textFieldStyle(.roundedBorder)
-                Button("Отклонить", role: .destructive) { store.decide(item.id, allow: false, comment: comment) }
-                Button("Разрешить") { store.decide(item.id, allow: true, comment: comment) }
-                    .buttonStyle(.borderedProminent)
+            if item.kind == "question" {
+                questions
+            } else if item.kind == "plan" {
+                if !compact {
+                    ScrollView { MarkdownView(text: item.gitStatus) }
+                        .frame(maxHeight: 260)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+                }
+                HStack {
+                    TextField("Что изменить в плане", text: $comment).textFieldStyle(.roundedBorder)
+                    Button("На доработку") { store.decide(item.id, allow: false, comment: comment) }
+                        .disabled(comment.trimmed.isEmpty)
+                    Button("Одобрить план") { store.decide(item.id, allow: true, comment: "") }
+                        .buttonStyle(.borderedProminent)
+                }
+            } else {
+                if !compact && !item.gitStatus.isEmpty {
+                    DisclosureGroup(item.kind == "commit" ? "Изменения (git status)" : "Подробности", isExpanded: $showStatus) {
+                        ScrollView {
+                            Text(item.gitStatus)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }.frame(maxHeight: 200)
+                    }.font(.caption)
+                }
+                HStack {
+                    TextField("Комментарий агенту (необязательно)", text: $comment).textFieldStyle(.roundedBorder)
+                    Button("Отклонить", role: .destructive) { store.decide(item.id, allow: false, comment: comment) }
+                    if item.canAlwaysAllow {
+                        Button("Разрешать в этой сессии") { store.decide(item.id, allow: true, comment: comment, always: true) }
+                            .help("Как «Yes, don't ask again» в терминале, но только до конца сессии")
+                    }
+                    Button("Разрешить") { store.decide(item.id, allow: true, comment: comment) }
+                        .buttonStyle(.borderedProminent)
+                }
             }
         }
+    }
+
+    @ViewBuilder var questions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(item.questions, id: \.self) { q in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        if !q.header.isEmpty { Pill(text: q.header, color: .blue) }
+                        Text(q.question).font(.callout.weight(.medium)).textSelection(.enabled)
+                    }
+                    ForEach(q.options, id: \.self) { o in
+                        let on = picks[q.question, default: []].contains(o.label)
+                        Button {
+                            var cur = picks[q.question, default: []]
+                            if q.multiSelect { if on { cur.remove(o.label) } else { cur.insert(o.label) } } else { cur = [o.label] }
+                            picks[q.question] = cur
+                            if !q.multiSelect { other[q.question] = "" }
+                        } label: {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: on ? (q.multiSelect ? "checkmark.square.fill" : "largecircle.fill.circle")
+                                                     : (q.multiSelect ? "square" : "circle"))
+                                    .foregroundStyle(on ? Color.accentColor : .secondary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(o.label)
+                                    if !o.description.isEmpty && !compact {
+                                        Text(o.description).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    TextField("Свой вариант", text: Binding(get: { other[q.question] ?? "" }, set: {
+                        other[q.question] = $0
+                        if !$0.isEmpty && !q.multiSelect { picks[q.question] = [] }
+                    }))
+                    .textFieldStyle(.roundedBorder)
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Ответить") { store.decide(item.id, allow: true, comment: "", answers: answers) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(answers.count < item.questions.count)
+            }
+        }
+    }
+
+    var answers: [String: String] {
+        var out: [String: String] = [:]
+        for q in item.questions {
+            var parts = q.options.map(\.label).filter { picks[q.question, default: []].contains($0) }
+            if let o = other[q.question]?.trimmed, !o.isEmpty { parts.append(o) }
+            if !parts.isEmpty { out[q.question] = parts.joined(separator: ", ") }
+        }
+        return out
     }
 }

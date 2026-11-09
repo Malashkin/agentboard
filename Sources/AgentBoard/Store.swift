@@ -24,6 +24,8 @@ final class Store: ObservableObject {
     @Published var lastError: String?
     @Published var importing: Set<String> = []
     @Published var lastWork: [String: Double] = [:]
+    @Published var reservations: [Reservation] = []
+    @Published var subagents: [SubagentItem] = []
     @Published var importReport: [String: String] = [:]
 
     private var reloadScheduled = false
@@ -48,7 +50,9 @@ final class Store: ObservableObject {
             let s = Core.shared.snapshot()
             DispatchQueue.main.async {
                 self.reloadScheduled = false
-                ThemeStore.animate { self.apply(s) }
+                // No global animation: changed text (last action, status) must not cross-fade on every
+                // update. Lists animate only when rows are added or removed (see `.animateRows`).
+                self.apply(s)
             }
         }
     }
@@ -65,6 +69,8 @@ final class Store: ObservableObject {
         if pending != s.pending { pending = s.pending }
         if messages != s.messages { messages = s.messages }
         if lastWork != s.lastWork { lastWork = s.lastWork }
+        if reservations != s.reservations { reservations = s.reservations }
+        if subagents != s.subagents { subagents = s.subagents }
     }
 
 
@@ -113,7 +119,11 @@ final class Store: ObservableObject {
     func inbox(of agent: String) -> [MessageItem] { messages.filter { $0.toAgent == agent } }
     func undelivered(to agent: String) -> Int { messages.filter { $0.toAgent == agent && $0.deliveredAt == nil }.count }
 
-    var waitingCount: Int { activeAgents().filter { status($0) == .waiting }.count + pending.count }
+    /// Agents waiting on you plus open requests — an agent with an open request counts once.
+    var waitingCount: Int {
+        let withRequest = Set(pending.map(\.agentId))
+        return activeAgents().filter { status($0) == .waiting && !withRequest.contains($0.id) }.count + pending.count
+    }
 
     func todayEvents(kind: String, project: String? = nil) -> [EventItem] {
         let start = Calendar.current.startOfDay(for: now).timeIntervalSince1970
@@ -183,8 +193,24 @@ final class Store: ObservableObject {
         }
     }
 
-    func decide(_ id: String, allow: Bool, comment: String) {
-        core { $0.resolveCommit(id: id, allow: allow, comment: comment) }
+    func decide(_ id: String, allow: Bool, comment: String, answers: [String: String] = [:], always: Bool = false) {
+        core { $0.resolveCommit(id: id, allow: allow, comment: comment, answers: answers, always: always) }
+    }
+
+    func reservations(of agent: String) -> [Reservation] { reservations.filter { $0.agentId == agent } }
+    func subagents(of agent: String) -> [SubagentItem] { subagents.filter { $0.agentId == agent } }
+    func dropReservation(_ id: Int64) { core { $0.dropReservation(id: id) } }
+
+    /// Runs git/terminal work off the main thread; completion on main with an error text or nil.
+    func workspace(_ work: @escaping () throws -> String?, done: @escaping (String?, String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let ok = try work()
+                DispatchQueue.main.async { done(ok, nil); self.reload() }
+            } catch {
+                DispatchQueue.main.async { done(nil, error.localizedDescription); self.reload() }
+            }
+        }
     }
 
     func generateSummary(day: Date) {

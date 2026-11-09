@@ -10,12 +10,23 @@ final class Core {
     let supportDir: URL
 
     private var cwdCache: [String: (projectId: String?, at: Double)] = [:]
-    private struct PendingEntry {
+    struct PendingEntry {
         var commit: PendingCommit
         var reply: (Data?) -> Void
         var timer: DispatchWorkItem
+        /// For tool permissions: the original input (answers are merged into it) and Claude's suggested rules.
+        var toolInput: JSON = [:]
+        var inputKey = ""
+        var suggestions: [Any] = []
     }
-    private var pending: [String: PendingEntry] = [:]
+    var pending: [String: PendingEntry] = [:]
+    /// Last `git commit` intent per repository root: who is committing (for the pre-commit guard).
+    var commitIntent: [String: (agentId: String, at: Double)] = [:]
+    /// Task launched from the board into a folder: the first agent that starts there takes it.
+    var launches: [String: (taskId: Int64, at: Double)] = [:]
+    /// Pending Agent/Task tool descriptions, consumed by SubagentStart.
+    var subagentDescriptions: [String: [String]] = [:]
+    var stuckState: [String: StuckTracker] = [:]
     private var mcpCalls: [(agentId: String, tool: String, args: String, at: Double)] = []
     private var lastInjected: [String: String] = [:]
     private var conflictSeen: [String: Double] = [:]
@@ -87,6 +98,24 @@ final class Core {
         """)
         let cols = Set(db.query("PRAGMA table_info(agents)").map { $0.s("name") })
         HistoryImporter.ensureSchema(self)
+        db.exec("""
+        CREATE TABLE IF NOT EXISTS reservations(
+          id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, agent_id TEXT, pattern TEXT, exclusive INTEGER DEFAULT 1,
+          reason TEXT DEFAULT '', created_at REAL, expires_at REAL, released_at REAL);
+        CREATE INDEX IF NOT EXISTS reservations_active ON reservations(project_id, expires_at);
+        CREATE TABLE IF NOT EXISTS subagents(
+          id TEXT PRIMARY KEY, agent_id TEXT, project_id TEXT, type TEXT DEFAULT '', description TEXT DEFAULT '',
+          status TEXT DEFAULT 'working', last_action TEXT DEFAULT '', result TEXT DEFAULT '', started_at REAL, ended_at REAL);
+        """)
+        func addColumn(_ table: String, _ col: String, _ def: String) {
+            let have = Set(db.query("PRAGMA table_info(\(table))").map { $0.s("name") })
+            if !have.contains(col) { db.exec("ALTER TABLE \(table) ADD COLUMN \(col) \(def)") }
+        }
+        addColumn("agents", "stuck", "TEXT DEFAULT ''")
+        addColumn("events", "sub", "TEXT DEFAULT ''")
+        addColumn("tasks", "worktree", "TEXT DEFAULT ''")
+        addColumn("tasks", "branch", "TEXT DEFAULT ''")
+        addColumn("tasks", "base_branch", "TEXT DEFAULT ''")
         let pcols = Set(db.query("PRAGMA table_info(projects)").map { $0.s("name") })
         if !pcols.contains("aliases") { db.exec("ALTER TABLE projects ADD COLUMN aliases TEXT DEFAULT ''") }
         if !cols.contains("tty") { db.exec("ALTER TABLE agents ADD COLUMN tty TEXT DEFAULT ''") }
@@ -106,6 +135,8 @@ final class Core {
         var pending: [PendingCommit]
         var messages: [MessageItem]
         var lastWork: [String: Double]
+        var reservations: [Reservation]
+        var subagents: [SubagentItem]
     }
 
     func snapshot() -> Snapshot {
@@ -127,7 +158,10 @@ final class Core {
             lastWork: Dictionary(uniqueKeysWithValues: db.query("""
                 SELECT project_id, MAX(created_at) AS t FROM events
                 WHERE kind IN ('prompt','action','commit','turn_done') GROUP BY project_id
-                """).map { ($0.s("project_id"), $0.d("t")) })
+                """).map { ($0.s("project_id"), $0.d("t")) }),
+            reservations: activeReservations(project: nil),
+            subagents: db.query("SELECT * FROM subagents WHERE started_at > ? OR status='working' ORDER BY started_at",
+                                [now() - 86400]).map(SubagentItem.init)
         )
     }
 
@@ -287,6 +321,7 @@ final class Core {
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, [id, project.id, tool, sessionId, name ?? pickName(project: project.id), cwd,
                   top.ok ? top.line : cwd, branch.ok ? branch.line : "", "idle", t, t, t, transcript ?? ""])
+        claimLaunchedTask(agent(id: id)!)
         return agent(id: id)!
     }
 
@@ -321,17 +356,17 @@ final class Core {
 
     @discardableResult
     func addEvent(project: String, agent: String?, kind: String, title: String, detail: String = "",
-                  client: String = "", ref: String = "") -> Int64 {
-        db.query("INSERT INTO events(project_id, agent_id, kind, title, detail, client, ref, created_at) VALUES(?,?,?,?,?,?,?,?)",
-                 [project, nn(agent), kind, title.trunc(300), detail.trunc(8000), client, ref, now()])
+                  client: String = "", ref: String = "", sub: String = "") -> Int64 {
+        db.query("INSERT INTO events(project_id, agent_id, kind, title, detail, client, ref, created_at, sub) VALUES(?,?,?,?,?,?,?,?,?)",
+                 [project, nn(agent), kind, title.trunc(300), detail.trunc(8000), client, ref, now(), sub])
         return db.lastInsertId
     }
 
     /// Raw activity (commands, edits). Hidden from the feed by default, used by agent_activity and summaries.
-    func addAction(agent: Agent, title: String, detail: String) {
-        let last = db.query("SELECT title FROM events WHERE agent_id=? ORDER BY id DESC LIMIT 1", [agent.id]).first?.s("title")
-        if last == title { return }
-        addEvent(project: agent.projectId, agent: agent.id, kind: "action", title: title, detail: detail.trimmed)
+    func addAction(agent: Agent, title: String, detail: String, sub: String = "") {
+        let last = db.query("SELECT title, sub FROM events WHERE agent_id=? ORDER BY id DESC LIMIT 1", [agent.id]).first
+        if last?.s("title") == title && last?.s("sub") == sub { return }
+        addEvent(project: agent.projectId, agent: agent.id, kind: "action", title: title, detail: detail.trimmed, sub: sub)
     }
 
     func touchFile(agent: Agent, path: String) {
@@ -545,6 +580,8 @@ final class Core {
                 out.append("- #\(t.id) [\(t.status.label), \(who)\(client)] \(t.title.trunc(120))")
             }
         }
+        let res = reservationsText(project: p.id)
+        if !res.isEmpty { out.append("Забронированные файлы (не правь чужие):\n" + res) }
         let notes = db.query("SELECT * FROM events WHERE project_id=? AND kind IN ('note','commit') AND created_at > ? ORDER BY created_at DESC, id DESC LIMIT 6",
                              [p.id, now() - 6 * 3600]).map(EventItem.init)
         if !notes.isEmpty {
@@ -559,7 +596,9 @@ final class Core {
             Правила работы в команде (инструменты MCP-сервера agentboard):
             1) Перед началом работы возьми задачу: claim_task(task_id) или create_task(title, client, claim=true).
             2) Объяви, над чем работаешь: set_focus(focus, files) — так другие агенты не тронут твои файлы.
-            3) Не правь файлы, которые сейчас правит другой агент; если нужно — напиши post_note и согласуй.
+            3) Перед правкой файлов, которые могут трогать другие, забронируй их: reserve_files(paths, minutes, reason).
+               Чужие брони не правь (правка будет остановлена, коммит с ними — тоже); договорись через send_message.
+               Закончил с файлами — release_files(). Брони снимаются сами по истечении срока и при закрытии сессии.
             4) Закончил — update_task(task_id, status="review" или "done", note="что сделано").
             5) Если работа для клиента — указывай client. Человек видит всё это на панели AgentBoard.
             6) Если человек просит посмотреть, что делает другой агент / соседний терминал / «Вега» и т.п. —
@@ -573,7 +612,7 @@ final class Core {
 
     // MARK: - Claude Code hooks
 
-    private func hookOutput(_ event: String, context: String? = nil, decision: String? = nil, reason: String? = nil) -> Data {
+    func hookOutput(_ event: String, context: String? = nil, decision: String? = nil, reason: String? = nil) -> Data {
         var h: JSON = ["hookEventName": event]
         if let context { h["additionalContext"] = context }
         if let decision { h["permissionDecision"] = decision }
@@ -608,12 +647,23 @@ final class Core {
         if let tty = j.str("_tty"), tty != agent.tty { setAgent(agent.id, ["tty": tty]) }
         defer { changed() }
 
+        // Tool calls made inside a subagent carry its id and type.
+        let subId = j.s("agent_id")
+        let subType = subId.isEmpty ? "" : (j.str("agent_type").flatMap { $0.isEmpty ? nil : $0 } ?? "субагент")
+        func label(_ s: String) -> String { subType.isEmpty ? s : "↳ \(subType): \(s)" }
+        func act(_ title: String, _ detail: String) {
+            addAction(agent: agent, title: title, detail: detail, sub: subType)
+            if !subId.isEmpty { db.query("UPDATE subagents SET last_action=? WHERE id=?", [title.trunc(200), subId]) }
+        }
+        let tool = j.s("tool_name")
+        let input = j["tool_input"] as? JSON ?? [:]
+
         switch event {
         case "SessionStart":
             let source = j.str("source") ?? "startup"
             let branch = Shell.git(["rev-parse", "--abbrev-ref", "HEAD"], cwd: cwd, timeout: 5)
             setAgent(agent.id, ["status": "idle", "branch": branch.ok ? branch.line : agent.branch,
-                                "last_action": "сессия: \(source)"])
+                                "last_action": "сессия: \(source)", "stuck": ""])
             if source == "startup" || source == "resume" {
                 addEvent(project: project.id, agent: agent.id, kind: "session_start",
                          title: "\(agent.name) подключился (\(agent.toolLabel))", detail: cwd)
@@ -623,7 +673,9 @@ final class Core {
 
         case "UserPromptSubmit":
             let prompt = j.s("prompt")
-            setAgent(agent.id, ["status": "working", "last_prompt": prompt.trunc(2000), "last_action": "получил запрос"])
+            setAgent(agent.id, ["status": "working", "last_prompt": prompt.trunc(2000), "last_action": "получил запрос", "stuck": ""])
+            stuckState[agent.id] = nil
+            dropPendingPermissions(agent: agent.id, inputKey: nil)
             if !prompt.hasPrefix("/") || prompt.count > 30 {
                 addEvent(project: project.id, agent: agent.id, kind: "prompt",
                          title: "\(agent.name): \(prompt.oneLine.trunc(160))", detail: prompt.trunc(4000))
@@ -640,6 +692,8 @@ final class Core {
             reply(ctx.isEmpty ? nil : hookOutput("UserPromptSubmit", context: ctx.joined(separator: "\n\n")))
 
         case "PostToolUse":
+            dropPendingPermissions(agent: agent.id, inputKey: tool + "|" + jsonString(input))
+            noteSuccess(agent: agent, tool: tool, input: input)
             // Delivery point for messages while the agent is busy.
             if let inbox = takeInbox(agent: agent.id) {
                 reply(hookOutput("PostToolUse", context: inbox))
@@ -647,28 +701,58 @@ final class Core {
                 reply(nil)
             }
 
+        case "PostToolUseFailure":
+            dropPendingPermissions(agent: agent.id, inputKey: tool + "|" + jsonString(input))
+            let error = j.s("error")
+            if j["is_interrupt"] as? Bool == true { reply(nil); return }
+            let (what, _) = tool == "Bash" ? ("$ " + input.s("command").oneLine.trunc(200), "")
+                : Self.describeTool(tool, input, agent: agent, project: project, core: self)
+            addEvent(project: project.id, agent: agent.id, kind: "tool_failed",
+                     title: label("ошибка: \(what)").trunc(240), detail: error.trunc(2000), sub: subType)
+            var ctx: [String] = []
+            if let nudge = noteFailure(agent: agent, project: project, tool: tool, input: input, error: error) { ctx.append(nudge) }
+            if let inbox = takeInbox(agent: agent.id) { ctx.append(inbox) }
+            reply(ctx.isEmpty ? nil : hookOutput("PostToolUseFailure", context: ctx.joined(separator: "\n\n")))
+
         case "PreToolUse":
-            let tool = j.s("tool_name")
-            let input = j["tool_input"] as? JSON ?? [:]
             if tool == "Bash" {
                 let cmd = input.s("command")
-                setAgent(agent.id, ["status": "working", "last_action": "$ " + cmd.oneLine.trunc(200)])
-                addAction(agent: agent, title: "$ " + cmd.oneLine.trunc(240), detail: (input.str("description") ?? "") + "\n" + cmd.trunc(2000))
+                setAgent(agent.id, ["status": "working", "last_action": label("$ " + cmd.oneLine.trunc(200))])
+                act("$ " + cmd.oneLine.trunc(240), (input.str("description") ?? "") + "\n" + cmd.trunc(2000))
+                let loopNudge = noteRepeat(agent: agent, project: project, key: "Bash|" + cmd.oneLine)
                 if Self.isGitCommit(cmd) {
+                    commitIntent[repoRoot(cwd)] = (agent.id, now())
                     startCommitFlow(agent: agent, project: project, command: cmd, cwd: cwd, reply: reply)
                     return
                 }
                 if Self.isGitPush(cmd) {
                     addEvent(project: project.id, agent: agent.id, kind: "push", title: "\(agent.name): git push", detail: cmd)
                 }
-                reply(nil)
+                reply(loopNudge.map { hookOutput("PreToolUse", context: $0) })
             } else if ["Edit", "Write", "MultiEdit", "NotebookEdit"].contains(tool) {
                 let full = input.str("file_path") ?? input.s("notebook_path")
                 let rel = relativePath(full, agent: agent, project: project)
                 let verb = tool == "Write" ? "пишет" : "правит"
-                setAgent(agent.id, ["status": "working", "last_action": "\(verb) \(rel)"])
+                // Reserved by another agent: stop the edit (or warn), and say who to talk to.
+                if let r = reservationConflicts(paths: [rel], project: project.id, except: agent.id).first?.1 {
+                    if !AppSettings.blockReservedEdits { touchFile(agent: agent, path: rel); act("\(verb) \(rel)", "") }
+                    let holder = self.agent(id: r.agentId)?.name ?? r.agentId
+                    let until = Fmt.time(r.expiresAt)
+                    let why = r.reason.isEmpty ? "" : " («\(r.reason)»)"
+                    addEvent(project: project.id, agent: agent.id, kind: "conflict",
+                             title: "\(agent.name) пытается править \(rel) — забронирован \(holder)", ref: rel)
+                    let text = "[AgentBoard] Файл \(rel) забронирован агентом \(holder) до \(until)\(why). "
+                        + "Не правь его: договорись через send_message(to: \"\(holder)\") или займись другой частью задачи."
+                    if AppSettings.blockReservedEdits {
+                        reply(hookOutput("PreToolUse", decision: "deny", reason: text))
+                    } else {
+                        reply(hookOutput("PreToolUse", context: text))
+                    }
+                    return
+                }
+                setAgent(agent.id, ["status": "working", "last_action": label("\(verb) \(rel)")])
                 touchFile(agent: agent, path: rel)
-                addAction(agent: agent, title: "\(verb) \(rel)", detail: "")
+                act("\(verb) \(rel)", "")
                 let others = AppSettings.conflictWarnings ? othersTouching(path: rel, project: project.id, except: agent.id) : []
                 if !others.isEmpty {
                     let names = others.map(\.name).joined(separator: ", ")
@@ -682,7 +766,7 @@ final class Core {
                         }
                     }
                     reply(hookOutput("PreToolUse",
-                                     context: "[AgentBoard] Внимание: файл \(rel) недавно правил(и) \(names). Не затирай их изменения; при необходимости согласуй через post_note или выбери другую задачу."))
+                                     context: "[AgentBoard] Внимание: файл \(rel) недавно правил(и) \(names). Не затирай их изменения; при необходимости согласуй через send_message или забронируй файл (reserve_files)."))
                 } else {
                     reply(nil)
                 }
@@ -690,25 +774,63 @@ final class Core {
                 let short = String(tool.dropFirst("mcp__agentboard__".count))
                 mcpCalls.removeAll { now() - $0.at > 60 }
                 mcpCalls.append((agent.id, short, jsonString(input), now()))
-                addAction(agent: agent, title: "agentboard: \(short)", detail: jsonString(input).trunc(1000))
+                act("agentboard: \(short)", jsonString(input).trunc(1000))
                 reply(nil)
             } else {
+                if tool == "Agent" || tool == "Task" {
+                    subagentDescriptions[agent.id, default: []].append(input.s("description"))
+                }
                 let (verb, detail) = Self.describeTool(tool, input, agent: agent, project: project, core: self)
-                setAgent(agent.id, ["status": "working", "last_action": verb.trunc(200)])
-                addAction(agent: agent, title: verb.trunc(240), detail: detail)
-                reply(nil)
+                setAgent(agent.id, ["status": "working", "last_action": label(verb.trunc(200))])
+                act(verb.trunc(240), detail)
+                reply(noteRepeat(agent: agent, project: project, key: tool + "|" + jsonString(input)).map { hookOutput("PreToolUse", context: $0) })
             }
+
+        case "PermissionRequest":
+            guard AppSettings.permissionsInApp, !tool.isEmpty else { reply(nil); return }
+            startPermissionFlow(agent: agent, project: project, tool: tool, input: input,
+                                suggestions: j["permission_suggestions"] as? [Any] ?? [], sub: subType, reply: reply)
+
+        case "SubagentStart":
+            guard !subId.isEmpty else { reply(nil); return }
+            let desc = subagentDescriptions[agent.id]?.isEmpty == false ? subagentDescriptions[agent.id]!.removeFirst() : ""
+            db.query("""
+                INSERT INTO subagents(id, agent_id, project_id, type, description, status, started_at)
+                VALUES(?,?,?,?,?,'working',?)
+                ON CONFLICT(id) DO UPDATE SET status='working', ended_at=NULL
+                """, [subId, agent.id, project.id, subType, desc, now()])
+            addEvent(project: project.id, agent: agent.id, kind: "subagent",
+                     title: "\(agent.name) запустил субагента \(subType)" + (desc.isEmpty ? "" : ": \(desc.trunc(140))"), sub: subType)
+            reply(nil)
+
+        case "SubagentStop":
+            // Claude Code's own internal agents also stop here; only track the ones we saw start.
+            guard !subId.isEmpty, !db.query("SELECT 1 FROM subagents WHERE id=?", [subId]).isEmpty else { reply(nil); return }
+            let result = j.s("last_assistant_message")
+            db.query("UPDATE subagents SET status='done', ended_at=?, result=? WHERE id=?", [now(), result.trunc(4000), subId])
+            addEvent(project: project.id, agent: agent.id, kind: "subagent",
+                     title: "Субагент \(subType) у \(agent.name) закончил", detail: result.trunc(3000), sub: subType)
+            reply(nil)
 
         case "Notification":
             let msg = j.str("message") ?? "Агент ждёт вашего ответа"
             setAgent(agent.id, ["status": "waiting", "last_action": msg.trunc(200)])
             addEvent(project: project.id, agent: agent.id, kind: "waiting", title: "\(agent.name): \(msg.trunc(200))")
-            if AppSettings.notifyWaiting { notify?("\(agent.name) · \(project.name)", msg) }
+            // A request already shown in the app was announced there.
+            if AppSettings.notifyWaiting && !pending.values.contains(where: { $0.commit.agentId == agent.id }) {
+                notify?("\(agent.name) · \(project.name)", msg)
+            }
             reply(nil)
 
         case "Stop":
-            let text = Self.lastAssistantText(transcript: j.str("transcript_path") ?? agent.transcriptPath)
-            setAgent(agent.id, ["status": "idle", "last_action": text.isEmpty ? "ход завершён" : "ответил: " + text.oneLine.trunc(160)])
+            if !subId.isEmpty { reply(nil); return }
+            var text = j.s("last_assistant_message").trimmed
+            if text.isEmpty { text = Self.lastAssistantText(transcript: j.str("transcript_path") ?? agent.transcriptPath) }
+            setAgent(agent.id, ["status": "idle", "stuck": "",
+                                "last_action": text.isEmpty ? "ход завершён" : "ответил: " + text.oneLine.trunc(160)])
+            stuckState[agent.id] = nil
+            dropPendingPermissions(agent: agent.id, inputKey: nil)
+            db.query("UPDATE subagents SET status='done', ended_at=? WHERE agent_id=? AND status='working'", [now(), agent.id])
             addEvent(project: project.id, agent: agent.id, kind: "turn_done",
                      title: "\(agent.name) завершил ход", detail: text.trunc(3000))
             // A message arrived while it was working: don't let it stop until it has read it.
@@ -720,14 +842,23 @@ final class Core {
             }
 
         case "SessionEnd":
-            setAgent(agent.id, ["status": "ended", "ended_at": now(), "last_action": "сессия закрыта"])
+            setAgent(agent.id, ["status": "ended", "ended_at": now(), "last_action": "сессия закрыта", "stuck": ""])
             addEvent(project: project.id, agent: agent.id, kind: "session_end", title: "\(agent.name) отключился")
             lastInjected[agent.id] = nil
+            dropPendingPermissions(agent: agent.id, inputKey: nil)
+            releaseReservations(agentId: agent.id, patterns: nil)
+            db.query("UPDATE subagents SET status='done', ended_at=? WHERE agent_id=? AND status='working'", [now(), agent.id])
             reply(nil)
 
         default:
             reply(nil)
         }
+    }
+
+    /// Top level of the git checkout containing `cwd` (worktrees have their own).
+    func repoRoot(_ cwd: String) -> String {
+        let top = Shell.git(["rev-parse", "--show-toplevel"], cwd: cwd, timeout: 5)
+        return top.ok ? top.line : cwd
     }
 
     /// Human-readable line for any Claude Code tool call.
@@ -796,10 +927,14 @@ final class Core {
     }
 
     /// allow == nil means timeout: hand the decision back to Claude Code's own prompt.
-    func resolveCommit(id: String, allow: Bool?, comment: String) {
+    func resolveCommit(id: String, allow: Bool?, comment: String, answers: [String: String] = [:], always: Bool = false) {
         guard let e = pending.removeValue(forKey: id) else { return }
         e.timer.cancel()
         let c = e.commit
+        if c.kind != "commit" {
+            resolvePermission(e, allow: allow, comment: comment, answers: answers, always: always)
+            return
+        }
         switch allow {
         case .some(true):
             e.reply(hookOutput("PreToolUse", decision: "allow", reason: "Коммит одобрен человеком в AgentBoard"))
@@ -895,6 +1030,9 @@ final class Core {
         case ("POST", "/hook/codex"):
             if let j = body as? JSON { handleCodexNotify(j) }
             reply(.empty())
+        case ("POST", "/hook/git-precommit"):
+            let msg = handlePreCommit(String(decoding: req.body, as: UTF8.self))
+            reply(HTTPResponse(status: 200, contentType: "text/plain; charset=utf-8", body: Data((msg ?? "").utf8)))
         case ("POST", "/hook/git"):
             if let j = body as? JSON { handleGitCommit(j) }
             reply(.empty())
@@ -908,6 +1046,18 @@ final class Core {
             reply(.empty(405))
         case ("DELETE", "/mcp"):
             reply(.empty(200))
+        case ("GET", "/api/pending"):
+            reply(.json(["pending": pending.values.map { e -> JSON in
+                let c = e.commit
+                return ["id": c.id, "kind": c.kind, "agent": c.agentName, "project": c.projectName, "summary": c.command,
+                        "questions": c.questions.map { ["question": $0.question, "options": $0.options.map(\.label)] }]
+            }]))
+        case ("POST", "/api/decide"):
+            // Same decision as the buttons in the app: {"id", "allow": true|false, "comment", "answers": {question: label}}.
+            guard let j = body as? JSON, let id = j.str("id"), pending[id] != nil else { reply(.json(["error": "not found"], status: 404)); return }
+            resolveCommit(id: id, allow: j.b("allow"), comment: j.s("comment"),
+                          answers: (j["answers"] as? [String: String]) ?? [:], always: j.b("always"))
+            reply(.json(["ok": true]))
         case ("GET", "/api/board"):
             let projects = allProjects()
             let text = projects.map { boardText(project: $0, me: nil, includeRules: false) }.joined(separator: "\n\n")

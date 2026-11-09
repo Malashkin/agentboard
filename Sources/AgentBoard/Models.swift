@@ -39,7 +39,7 @@ struct Project: Identifiable, Hashable {
 }
 
 enum AgentStatus: String {
-    case working, waiting, idle, ended, stale
+    case working, waiting, idle, ended, stale, stuck
 
     var label: String {
         switch self {
@@ -48,6 +48,7 @@ enum AgentStatus: String {
         case .idle: return "свободен"
         case .ended: return "завершён"
         case .stale: return "неактивен"
+        case .stuck: return "застрял"
         }
     }
     var color: Color {
@@ -57,6 +58,7 @@ enum AgentStatus: String {
         case .idle: return .blue
         case .ended: return .secondary
         case .stale: return .gray
+        case .stuck: return .red
         }
     }
     var icon: String {
@@ -66,6 +68,7 @@ enum AgentStatus: String {
         case .idle: return "checkmark.circle"
         case .ended: return "moon.zzz"
         case .stale: return "pause.circle"
+        case .stuck: return "arrow.triangle.2.circlepath"
         }
     }
 }
@@ -89,9 +92,11 @@ struct Agent: Identifiable, Hashable {
     var endedAt: Double?
     var transcriptPath: String
     var tty: String
+    /// Why the agent looks stuck in a loop ("" when fine).
+    var stuck: String
 
     init(_ r: Row) {
-        tty = r.s("tty")
+        tty = r.s("tty"); stuck = r.s("stuck")
         id = r.s("id"); projectId = r.s("project_id"); tool = r.s("tool"); sessionId = r.s("session_id")
         name = r.s("name"); cwd = r.s("cwd"); root = r.s("root"); branch = r.s("branch"); status = r.s("status")
         lastPrompt = r.s("last_prompt"); focus = r.s("focus"); lastAction = r.s("last_action")
@@ -111,6 +116,7 @@ struct Agent: Identifiable, Hashable {
     func displayStatus(staleMinutes: Double, at date: Date = Date()) -> AgentStatus {
         if status == "ended" { return .ended }
         if date.timeIntervalSince1970 - lastSeen > staleMinutes * 60 { return .stale }
+        if !stuck.isEmpty && status == "working" { return .stuck }
         return AgentStatus(rawValue: status) ?? .idle
     }
     func isActive(staleMinutes: Double, at date: Date = Date()) -> Bool {
@@ -152,8 +158,13 @@ struct TaskItem: Identifiable, Hashable {
     var createdAt: Double
     var updatedAt: Double
     var doneAt: Double?
+    /// Isolated checkout the task's agent works in (empty when it works in the main folder).
+    var worktree: String
+    var branch: String
+    var baseBranch: String
 
     init(_ r: Row) {
+        worktree = r.s("worktree"); branch = r.s("branch"); baseBranch = r.s("base_branch")
         id = r.i("id"); projectId = r.s("project_id"); title = r.s("title"); details = r.s("details")
         client = r.s("client"); status = TaskStatus(rawValue: r.s("status")) ?? .backlog
         assignee = r.str("assignee"); createdBy = r.s("created_by"); createdAt = r.d("created_at")
@@ -171,15 +182,18 @@ struct EventItem: Identifiable, Hashable {
     var client: String
     var ref: String
     var createdAt: Double
+    /// Subagent type when the action was made by a subagent (Explore, Plan, …).
+    var sub: String
 
     init(_ r: Row) {
+        sub = r.s("sub")
         id = r.i("id"); projectId = r.s("project_id"); agentId = r.str("agent_id"); kind = r.s("kind")
         title = r.s("title"); detail = r.s("detail"); client = r.s("client"); ref = r.s("ref")
         createdAt = r.d("created_at")
     }
 
     /// Low-signal events are hidden from the feed by default.
-    var isRoutine: Bool { ["prompt", "turn_done", "session_start", "session_end", "focus", "action"].contains(kind) }
+    var isRoutine: Bool { ["prompt", "turn_done", "session_start", "session_end", "focus", "action", "tool_failed", "subagent", "reservation"].contains(kind) }
 
     var icon: String {
         switch kind {
@@ -197,6 +211,12 @@ struct EventItem: Identifiable, Hashable {
         case "message": return "envelope.fill"
         case "action": return "terminal"
         case "focus": return "scope"
+        case "stuck": return "arrow.triangle.2.circlepath"
+        case "tool_failed": return "xmark.octagon"
+        case "subagent": return "person.2.badge.gearshape"
+        case "reservation": return "lock.fill"
+        case "permission": return "lock.shield"
+        case "workspace": return "square.split.bottomrightquarter"
         case "task_created": return "plus.square"
         case "task_claimed": return "person.crop.square"
         case "task_status": return "arrow.right.square"
@@ -245,16 +265,72 @@ struct SummaryItem: Identifiable, Hashable {
     }
 }
 
+/// Something an agent waits on a human for: a commit, a tool permission, a question, a plan.
 struct PendingCommit: Identifiable, Hashable {
     var id: String
     var agentId: String
     var agentName: String
     var projectId: String
     var projectName: String
+    /// Short summary (the command, the tool call…).
     var command: String
+    /// Longer detail: git status, diff preview, plan text.
     var gitStatus: String
     var createdAt: Double
     var deadline: Double
+    /// commit | permission | question | plan
+    var kind: String = "commit"
+    var toolName: String = ""
+    var questions: [AskQuestion] = []
+    /// Claude Code offered "don't ask again" rules for this request.
+    var canAlwaysAllow = false
+}
+
+struct AskQuestion: Hashable {
+    var question: String
+    var header: String
+    var options: [AskOption]
+    var multiSelect: Bool
+}
+
+struct AskOption: Hashable {
+    var label: String
+    var description: String
+}
+
+struct Reservation: Identifiable, Hashable {
+    var id: Int64
+    var projectId: String
+    var agentId: String
+    var pattern: String
+    var exclusive: Bool
+    var reason: String
+    var createdAt: Double
+    var expiresAt: Double
+
+    init(_ r: Row) {
+        id = r.i("id"); projectId = r.s("project_id"); agentId = r.s("agent_id"); pattern = r.s("pattern")
+        exclusive = r.i("exclusive") != 0; reason = r.s("reason"); createdAt = r.d("created_at"); expiresAt = r.d("expires_at")
+    }
+}
+
+struct SubagentItem: Identifiable, Hashable {
+    var id: String
+    var agentId: String
+    var type: String
+    var description: String
+    var status: String
+    var lastAction: String
+    var result: String
+    var startedAt: Double
+    var endedAt: Double?
+
+    init(_ r: Row) {
+        id = r.s("id"); agentId = r.s("agent_id"); type = r.s("type"); description = r.s("description")
+        status = r.s("status"); lastAction = r.s("last_action"); result = r.s("result")
+        startedAt = r.d("started_at"); endedAt = r.od("ended_at")
+    }
+    var isRunning: Bool { status == "working" }
 }
 
 struct WorktreeInfo: Identifiable, Hashable {

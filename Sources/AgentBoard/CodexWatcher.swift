@@ -203,6 +203,7 @@ extension Core {
                 setAgent(a.id, ["status": "working", "last_action": "$ " + cmd.oneLine.trunc(200)])
                 addAction(agent: a, title: "$ " + cmd.oneLine.trunc(240), detail: cmd.trunc(2000))
                 if Self.isGitCommit(cmd) {
+                    commitIntent[repoRoot(st.cwd)] = (a.id, now())
                     addEvent(project: project.id, agent: a.id, kind: "commit_request", title: "\(a.name) коммитит (Codex)", detail: cmd)
                     if AppSettings.commitMode != .off {
                         notify?("\(a.name) коммитит · \(project.name)", cmd.oneLine.trunc(200))
@@ -243,6 +244,15 @@ extension Core {
             touchFile(agent: a, path: rel)
             setAgent(a.id, ["status": "working", "last_action": "\(verb) \(rel)"])
             addAction(agent: a, title: "\(verb) \(rel)", detail: "")
+            // Codex can't be stopped before a patch; tell it and the human right away.
+            if let r = reservationConflicts(paths: [rel], project: project.id, except: a.id).first?.1 {
+                let holder = agent(id: r.agentId)?.name ?? r.agentId
+                addEvent(project: project.id, agent: a.id, kind: "conflict",
+                         title: "\(a.name) изменил \(rel), забронированный \(holder)", ref: rel)
+                notify?("Правка чужой брони · \(project.name)", "\(a.name) изменил \(rel) — его забронировал \(holder)")
+                sendMessage(project: project.id, to: a.id, from: nil,
+                            text: "Файл \(rel) забронирован агентом \(holder) до \(Fmt.time(r.expiresAt)). Верни свои изменения в нём или согласуй с \(holder) через send_message.")
+            }
             let others = AppSettings.conflictWarnings ? othersTouching(path: rel, project: project.id, except: a.id) : []
             if !others.isEmpty {
                 let names = others.map { $0.name }.joined(separator: ", ")

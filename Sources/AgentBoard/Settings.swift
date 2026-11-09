@@ -28,6 +28,14 @@ enum Pref {
     static let exportDir = "exportDir"
     static let staleMinutes = "staleMinutes"
     static let summaryModel = "summaryModel"
+    static let permissionsInApp = "permissionsInApp"
+    static let permissionTimeout = "permissionTimeout"
+    static let blockReservedEdits = "blockReservedEdits"
+    static let reservationMinutes = "reservationMinutes"
+    static let stuckDetection = "stuckDetection"
+    static let stuckNudge = "stuckNudge"
+    static let terminalApp = "terminalApp"
+    static let worktreeRoot = "worktreeRoot"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -45,6 +53,14 @@ enum Pref {
             exportDir: NSHomeDirectory() + "/Documents/AgentBoard",
             staleMinutes: 30.0,
             summaryModel: "",
+            permissionsInApp: true,
+            permissionTimeout: 900,
+            blockReservedEdits: true,
+            reservationMinutes: 30,
+            stuckDetection: true,
+            stuckNudge: true,
+            terminalApp: "Terminal",
+            worktreeRoot: NSHomeDirectory() + "/.agentboard/worktrees",
         ])
     }
 }
@@ -65,4 +81,15 @@ enum AppSettings {
     static var exportDir: String { d.string(forKey: Pref.exportDir) ?? NSHomeDirectory() + "/Documents/AgentBoard" }
     static var staleMinutes: Double { max(5, d.double(forKey: Pref.staleMinutes)) }
     static var summaryModel: String { d.string(forKey: Pref.summaryModel) ?? "" }
+    static var permissionsInApp: Bool { d.bool(forKey: Pref.permissionsInApp) }
+    static var permissionTimeout: Double { max(30, d.double(forKey: Pref.permissionTimeout)) }
+    static var blockReservedEdits: Bool { d.bool(forKey: Pref.blockReservedEdits) }
+    static var reservationMinutes: Double { max(1, d.double(forKey: Pref.reservationMinutes)) }
+    static var stuckDetection: Bool { d.bool(forKey: Pref.stuckDetection) }
+    static var stuckNudge: Bool { d.bool(forKey: Pref.stuckNudge) }
+    static var terminalApp: String { d.string(forKey: Pref.terminalApp) ?? "Terminal" }
+    static var worktreeRoot: String {
+        let v = d.string(forKey: Pref.worktreeRoot) ?? ""
+        return v.isEmpty ? NSHomeDirectory() + "/.agentboard/worktrees" : (v as NSString).expandingTildeInPath
+    }
 }

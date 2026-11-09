@@ -5,7 +5,7 @@ struct StatusBadge: View {
     let status: AgentStatus
     var body: some View {
         HStack(spacing: 5) {
-            PulseDot(color: status.color, active: status == .working || status == .waiting)
+            PulseDot(color: status.color, active: status == .working || status == .waiting || status == .stuck)
             Text(status.label)
         }
         .font(.caption.weight(.medium))
@@ -174,8 +174,15 @@ extension View {
             .animation(ThemeStore.shared.anim(), value: value)
     }
 
+    /// Animates a list only when its set of rows changes — not when text inside a row changes.
+    func animateRows<ID: Hashable>(_ ids: [ID]) -> some View {
+        animation(ThemeStore.shared.anim(), value: ids)
+    }
+
     /// New rows slide in from the top and fade; removed rows fade out.
     func feedRowTransition() -> some View {
-        transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+        // A short offset, not a slide across the container: rows never travel over other content,
+        // and removed rows leave at once instead of lingering mid-animation.
+        transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -6)), removal: .identity))
     }
 }

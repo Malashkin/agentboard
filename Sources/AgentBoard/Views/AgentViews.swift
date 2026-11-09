@@ -33,9 +33,34 @@ struct AgentCard: View {
                     Label(agent.focus, systemImage: "scope").font(.callout).lineLimit(2)
                 }
                 // Fixed height, so a new prompt doesn't resize the card and reflow the grid.
-                Text(agent.lastPrompt.isEmpty ? " " : "«\(agent.lastPrompt.oneLine)»").font(.callout).foregroundStyle(.secondary)
+                Text(agent.lastPrompt.isEmpty ? " " : "«\(agent.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression).oneLine.trimmed)»").font(.callout).foregroundStyle(.secondary)
                     .lineLimit(3, reservesSpace: true)
                     .contentTransition(.opacity)
+                if !agent.stuck.isEmpty && st == .stuck {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.red)
+                        Text(agent.stuck).font(.caption).foregroundStyle(.red).lineLimit(2)
+                        Spacer(minLength: 0)
+                        Button("Написать") { onMessage() }.font(.caption).buttonStyle(.borderless)
+                    }
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.08)))
+                }
+                let subs = store.subagents(of: agent.id)
+                if !subs.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(subs.filter(\.isRunning).prefix(4)) { s in
+                            Pill(text: s.type, color: .green, icon: "arrow.turn.down.right")
+                        }
+                        let done = subs.filter { !$0.isRunning }.count
+                        if done > 0 { Pill(text: "\(done) субагент(ов) готово", color: .secondary) }
+                    }
+                }
+                let held = store.reservations(of: agent.id)
+                if !held.isEmpty {
+                    Label(held.map(\.pattern).joined(separator: " · "), systemImage: "lock.fill")
+                        .font(.caption.monospaced()).foregroundStyle(.orange).lineLimit(1).truncationMode(.middle)
+                }
                 let files = store.files(of: agent.id).prefix(4).map(\.path)
                 if !files.isEmpty {
                     Text(files.joined(separator: " · ")).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -98,11 +123,12 @@ struct AgentsGrid: View {
                                   onOpen: { detail = a },
                                   onMessage: { messageTo = MessageTarget(projectId: a.projectId, agent: a.id) })
                             .hoverLift()
-                            .transition(.scale(scale: 0.92).combined(with: .opacity))
+                            .transition(.opacity)
                     }
                 }
             }
         }
+        .animateRows(list.map(\.id))
         .sheet(item: $detail) { a in AgentDetailSheet(agentId: a.id) }
         .sheet(item: $messageTo) { t in MessageSheet(target: t) }
     }
@@ -239,7 +265,9 @@ struct AgentDetailSheet: View {
                                     HStack(alignment: .top, spacing: 6) {
                                         Text(Fmt.time(e.createdAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                         Image(systemName: e.icon).foregroundStyle(e.color).font(.caption)
-                                        Text(e.title).font(.caption).lineLimit(3).textSelection(.enabled)
+                                        Text((e.sub.isEmpty || e.title.hasPrefix("↳") ? "" : "↳ \(e.sub): ") + e.title)
+                                            .font(.caption).lineLimit(3).textSelection(.enabled)
+                                            .padding(.leading, e.sub.isEmpty ? 0 : 10)
                                     }
                                 }
                             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -247,6 +275,48 @@ struct AgentDetailSheet: View {
                     }
                 }
                 .frame(height: 280)
+                let subs = store.subagents(of: a.id)
+                if !subs.isEmpty {
+                    GroupBox("Субагенты") {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(subs.reversed()) { s in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: s.isRunning ? "bolt.fill" : "checkmark.circle")
+                                            .foregroundStyle(s.isRunning ? .green : .secondary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack {
+                                                Text(s.type).font(.callout.weight(.medium))
+                                                if !s.description.isEmpty { Text(s.description).font(.caption).foregroundStyle(.secondary) }
+                                                Spacer()
+                                                Text(Fmt.time(s.startedAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                            }
+                                            let line = s.isRunning ? s.lastAction : s.result
+                                            if !line.isEmpty { Text(line.oneLine).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                                        }
+                                    }
+                                }
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(maxHeight: 140)
+                    }
+                }
+                let held = store.reservations(of: a.id)
+                if !held.isEmpty {
+                    GroupBox("Брони файлов") {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(held) { r in
+                                HStack {
+                                    Image(systemName: "lock.fill").foregroundStyle(.orange)
+                                    Text(r.pattern).font(.caption.monospaced())
+                                    if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary) }
+                                    Spacer()
+                                    Text("до \(Fmt.time(r.expiresAt))").font(.caption)
+                                    Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.borderless)
+                                }
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 let inbox = store.inbox(of: a.id)
                 if !inbox.isEmpty {
                     GroupBox("Сообщения агенту") {

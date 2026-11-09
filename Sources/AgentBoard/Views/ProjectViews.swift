@@ -104,6 +104,8 @@ struct FeedList: View {
     let projectId: String?
     var limit = 200
     var showComposer = false
+    /// Long lists (the Feed tab) render lazily; short dashboard lists don't, which keeps row animations reliable.
+    var lazy = true
     @State private var showRoutine = false
     @State private var search = ""
     @State private var expanded: Set<Int64> = []
@@ -134,12 +136,19 @@ struct FeedList: View {
             if items.isEmpty {
                 Text("Событий пока нет").foregroundStyle(.secondary).padding(.vertical, 20)
             }
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(items) { e in
-                    VStack(spacing: 0) { row(e); Divider() }
-                        .feedRowTransition()
-                }
+            if lazy {
+                LazyVStack(alignment: .leading, spacing: 0) { rows }
+            } else {
+                VStack(alignment: .leading, spacing: 0) { rows }
+                    .animateRows(items.map(\.id))
             }
+        }
+    }
+
+    @ViewBuilder var rows: some View {
+        ForEach(items) { e in
+            VStack(spacing: 0) { row(e); Divider() }
+                .feedRowTransition()
         }
     }
 
@@ -233,6 +242,7 @@ struct GitView: View {
                     }
                     Divider()
                 }.feedRowTransition()
+                .animateRows(snap.todayCommits.map(\.id))
             }
             .padding(20)
         }

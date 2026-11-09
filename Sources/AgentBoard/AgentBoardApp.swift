@@ -81,10 +81,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GitMonitor.shared.onUpdate = { snap in if store.git != snap { ThemeStore.animate { store.git = snap } } }
         GitMonitor.shared.start()
         CodexWatcher.shared.start()
+        SessionLiveness.shared.start()
+        // Keep each project's git hooks current (pre-commit guard added in newer versions, moved folders).
+        DispatchQueue.global(qos: .utility).async {
+            for p in core.q.sync(execute: { core.allProjects() }) { try? Integrations.installGitHook(p) }
+        }
 
         // Debug aid: AGENTBOARD_SNAPSHOT=/path.png saves an image of the main window (no screen-recording permission needed).
         if let shot = ProcessInfo.processInfo.environment["AGENTBOARD_SNAPSHOT"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            let delay = Double(ProcessInfo.processInfo.environment["AGENTBOARD_SNAPSHOT_DELAY"] ?? "") ?? 4
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.frame.width > 600 }),
                       let v = w.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return }
                 v.cacheDisplay(in: v.bounds, to: rep)

@@ -203,6 +203,13 @@ struct SettingsView: View {
     @AppStorage(Pref.exportDir) private var exportDir = NSHomeDirectory() + "/Documents/AgentBoard"
     @AppStorage(Pref.staleMinutes) private var staleMinutes = 30.0
     @AppStorage(Pref.summaryModel) private var summaryModel = ""
+    @AppStorage(Pref.permissionsInApp) private var permissionsInApp = true
+    @AppStorage(Pref.blockReservedEdits) private var blockReservedEdits = true
+    @AppStorage(Pref.reservationMinutes) private var reservationMinutes = 30.0
+    @AppStorage(Pref.stuckDetection) private var stuckDetection = true
+    @AppStorage(Pref.stuckNudge) private var stuckNudge = true
+    @AppStorage(Pref.terminalApp) private var terminalApp = "Terminal"
+    @AppStorage(Pref.worktreeRoot) private var worktreeRoot = NSHomeDirectory() + "/.agentboard/worktrees"
 
     var body: some View {
         TabView {
@@ -234,6 +241,30 @@ struct SettingsView: View {
             Form {
                 Toggle("Сообщать агенту, что делают другие (при каждом новом запросе, если что-то изменилось)", isOn: $injectContext)
                 Toggle("Предупреждать агента о правке чужих файлов", isOn: $conflictWarnings)
+                Section("Брони файлов") {
+                    Toggle("Не давать править файлы, забронированные другим агентом", isOn: $blockReservedEdits)
+                    Stepper("Бронь по умолчанию на \(Int(reservationMinutes)) мин", value: $reservationMinutes, in: 5...240, step: 5)
+                    Text("Коммит агента, задевающий чужую бронь, останавливает git pre-commit хук. Ваши собственные коммиты не блокируются.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Разрешения и вопросы") {
+                    Toggle("Показывать запросы разрешений, вопросы и планы агентов в приложении", isOn: $permissionsInApp)
+                    Text("Ответить можно здесь или, как обычно, в терминале — что раньше. Нужны переустановленные хуки (Подключения).")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Зацикливание") {
+                    Toggle("Замечать, когда агент ходит по кругу", isOn: $stuckDetection)
+                    Toggle("Подсказывать самому агенту остановиться и сменить подход", isOn: $stuckNudge).disabled(!stuckDetection)
+                    Text("Признаки: одна и та же команда падает 3 раза за 20 минут, 8 ошибок подряд или одно и то же действие 5 раз из последних 20.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Запуск задач") {
+                    Picker("Терминал", selection: $terminalApp) {
+                        Text("Terminal").tag("Terminal")
+                        Text("iTerm2").tag("iTerm")
+                    }
+                    TextField("Папка для рабочих копий (worktree)", text: $worktreeRoot)
+                }
                 Divider()
                 Toggle("Уведомление: коммит", isOn: $notifyCommits)
                 Toggle("Уведомление: агент ждёт вас", isOn: $notifyWaiting)

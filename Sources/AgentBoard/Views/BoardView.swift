@@ -48,7 +48,7 @@ struct BoardView: View {
                 Spacer()
             }
             ScrollView {
-                LazyVStack(spacing: 8) {
+                VStack(spacing: 8) {
                     ForEach(list) { t in
                         TaskCard(task: t)
                             .onTapGesture { editing = t }
@@ -58,9 +58,12 @@ struct BoardView: View {
                                     Button("→ \(s.label)") { store.moveTask(t.id, to: s) }
                                 }
                                 Divider()
+                                Button("Запустить агента / рабочая копия…") { editing = t }
+                                Divider()
                                 Button("Удалить", role: .destructive) { store.deleteTask(t.id) }
                             }
                     }.feedRowTransition()
+                    .animateRows(list.map(\.id))
                 }
             }
         }
@@ -90,6 +93,7 @@ struct TaskCard: View {
                 }
                 HStack(spacing: 6) {
                     if !task.client.isEmpty { Pill(text: task.client, color: .accentColor, icon: "person.crop.square") }
+                    if !task.branch.isEmpty { Pill(text: task.branch, color: .purple, icon: "arrow.triangle.branch") }
                     if let a = store.agent(task.assignee) {
                         let st = store.status(a)
                         Pill(text: a.name, color: st == .working || st == .waiting ? .green : .secondary, icon: a.toolIcon)
@@ -141,6 +145,11 @@ struct TaskEditor: View {
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
                 }
             }
+            if let original {
+                Divider()
+                TaskWorkspaceSection(taskId: original.id)
+                Divider()
+            }
             HStack {
                 if let original {
                     Button("Удалить", role: .destructive) { store.deleteTask(original.id); dismiss() }
@@ -154,7 +163,7 @@ struct TaskEditor: View {
             }
         }
         .padding(20)
-        .frame(width: 540)
+        .frame(width: 720)
         .onAppear {
             if let t = original {
                 title = t.title; details = t.details; client = t.client; status = t.status; assignee = t.assignee ?? ""

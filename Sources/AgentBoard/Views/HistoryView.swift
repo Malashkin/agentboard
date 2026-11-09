@@ -170,13 +170,14 @@ struct HistoryView: View {
                     Text(Fmt.time(e.createdAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 40, alignment: .leading)
                     Image(systemName: e.icon).foregroundStyle(e.color).frame(width: 16)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(e.title).font(.callout).textSelection(.enabled)
+                        Text((e.sub.isEmpty || e.title.hasPrefix("↳") ? "" : "↳ \(e.sub): ") + e.title).font(.callout).textSelection(.enabled)
                         if (e.kind == "turn_done" || e.kind == "commit" || e.kind == "note") && !e.detail.isEmpty {
                             Text(e.detail.trunc(1200)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }
                 }
             }.feedRowTransition()
+            .animateRows(items.map(\.id))
         }
     }
 
