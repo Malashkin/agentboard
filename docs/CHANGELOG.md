@@ -52,7 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Child `claude` runs inherited the launching Claude Code session's variables.
 - A denied edit was recorded as work on the file.
 
+### Removed
+- Unused code: `Store.todayEvents`, `String.firstLine`, the `SectionHeader` view, an unused parameter in session delivery.
+- Unused logo concept images from `docs/assets`.
+
 ### Security
+- Isolated runs can no longer edit the real Claude Code / Codex configuration (installers honour `CLAUDE_CONFIG_DIR` / `CODEX_HOME`).
 - Requests whose `Host` is not local are refused (DNS rebinding).
 - Known open issues from the 2026-11-09 audit are tracked in [security/overview.md](security/overview.md).
 

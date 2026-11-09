@@ -18,6 +18,8 @@ updated: 2026-11-09
 | `git-post-commit` | — | `POST /hook/git` `{"cwd","hash"}` (async) |
 | `git-pre-commit` | — | `POST /hook/git-precommit` (root + staged files, text); non-empty answer → message on stderr, exit 1 |
 
+The bridge reads the port from the `port` file next to its own `bin/` folder (`~/.agentboard/port`, or
+`$AGENTBOARD_BRIDGE_DIR/port` for an isolated instance), so a test instance's hooks never reach the real app.
 If the app is unreachable the bridge exits 0 with no output. `AGENTBOARD_INTERNAL=1` (set for the app's
 own child processes) disables it.
 

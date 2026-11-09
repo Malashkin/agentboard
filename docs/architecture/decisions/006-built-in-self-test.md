@@ -25,6 +25,12 @@ Ship end-to-end checks inside the binary: `AgentBoard --self-test` creates a thr
 
 ### Negative
 - No UI tests; no per-test isolation beyond the run.
+- No off-the-shelf mutation or coverage tooling: mutation testing is a small script with hand-picked
+  mutants (`scripts/mutation-check.py`); coverage uses LLVM tools from the Command Line Tools.
+
+### Follow-up (2026-11-09)
+- Checks are grouped into unit / contract / integration layers; property-based checks use a seeded RNG.
+- The integration layer includes an end-to-end commit through a real HTTP server, the real bridge and git hooks.
 
 ## Alternatives Considered
 

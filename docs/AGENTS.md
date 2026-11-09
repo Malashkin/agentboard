@@ -2,7 +2,7 @@
 audience: all
 owner: @Malashkin
 updated: 2026-11-09
-applies-to: 4bcaae6
+applies-to: d4917f9
 ---
 
 # AgentBoard — Agent & Contributor Guide
@@ -86,3 +86,6 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 - **Paths:** compare repository roots via `git rev-parse --show-toplevel` (`Core.repoRoot`) — `/var/…` vs `/private/var/…` and moved folders otherwise break matching.
 - **Claude's session files** store `procStart` in UTC (`SessionLiveness.isAlive` handles both).
 - Changing the port requires re-registering the MCP server (Integrations → Connect).
+- **Isolated runs:** set `AGENTBOARD_DATA_DIR`, `AGENTBOARD_BRIDGE_DIR`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` together —
+  the bridge then uses its own port file and installers edit only the test folders.
+- The self-test starts a real HTTP server on a spare port (27700–27759) and runs real `git commit`s in a temp repo.

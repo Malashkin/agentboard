@@ -26,7 +26,7 @@ accepts `agent_id` and `project_path`.
 | `who_touches` | `path` | Recent editors and reservation holder |
 | `reserve_files` | `paths[]`, `minutes?`, `exclusive?`, `reason?` | Lease files/folders/globs (renew by calling again) |
 | `release_files` | `paths[]?` | Release own leases (all if omitted) |
-| `register_agent` | `cwd`, `tool?`, `name?` | For clients without hooks; returns `agent_id` |
+| `register_agent` | `cwd`, `tool?`, `name?`, `project_path?` | For clients without hooks; returns `agent_id`. Refused (`isError`) unless `cwd` or `project_path` belongs to a known project — a client started elsewhere is never attached to a project by guess |
 
 Results are plain text in `content[0].text`; `isError` marks refusals. Pending inbox messages are
 appended to tool results.

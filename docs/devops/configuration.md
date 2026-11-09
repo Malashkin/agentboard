@@ -36,10 +36,10 @@ updated: 2026-11-09
 | Variable | Effect |
 |---|---|
 | `AGENTBOARD_DATA_DIR` | Database folder; also enables test mode (no model calls, no auto summary) |
-| `AGENTBOARD_BRIDGE_DIR` | Folder for the bridge script and port file (default `~/.agentboard`) |
+| `AGENTBOARD_BRIDGE_DIR` | Folder for the bridge script and its `port` file (default `~/.agentboard`); the bridge always uses the port file next to itself |
 | `AGENTBOARD_WORKTREE_ROOT` | Overrides `worktreeRoot` |
-| `CLAUDE_CONFIG_DIR` | Claude Code folder for sessions/transcripts (default `~/.claude`) |
-| `CODEX_HOME` | Codex folder (default `~/.codex`) |
+| `CLAUDE_CONFIG_DIR` | Claude Code folder (default `~/.claude`): sessions, transcripts **and** the `settings.json` the installers edit |
+| `CODEX_HOME` | Codex folder (default `~/.codex`): logs **and** the `config.toml` / `hooks.json` the installers edit |
 | `AGENTBOARD_SNAPSHOT`, `AGENTBOARD_SNAPSHOT_DELAY` | Debug: save a PNG of the main window after N seconds |
 | `AGENTBOARD_INTERNAL` | Set for the app's child processes; makes the bridge a no-op |
 

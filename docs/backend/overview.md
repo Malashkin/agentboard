@@ -14,7 +14,7 @@ All sources are in `Sources/AgentBoard/`.
 | `Coordination.swift` | Reservations and pre-commit guard, stuck detection, permission/question/plan flow, launched-task claiming |
 | `MCPServer.swift` | MCP JSON-RPC: tool definitions and handlers |
 | `HTTPServer.swift` | Loopback HTTP/1.1 server (Network.framework), delayed replies |
-| `Integrations.swift` | Bridge script, Claude/Codex hooks and MCP registration, git hooks, AGENTS.md snippet |
+| `Integrations.swift` | Bridge script, Claude/Codex hooks and MCP registration (paths follow `CLAUDE_CONFIG_DIR` / `CODEX_HOME`), git hooks, AGENTS.md snippet |
 | `CodexWatcher.swift` | Follows Codex rollout logs (for sessions without hooks) |
 | `SessionLiveness.swift` | Reads `~/.claude/sessions/*.json`, verifies processes, marks open/closed sessions |
 | `Narrator.swift` | Plain-language status lines via `claude -p` |
@@ -28,7 +28,8 @@ All sources are in `Sources/AgentBoard/`.
 | `Notifier.swift` | Notifications with action buttons |
 | `Settings.swift` | Preference keys and defaults |
 | `Database.swift`, `Util.swift` | SQLite wrapper; JSON helpers, `Shell`, formatters |
-| `SelfTest.swift` | `--self-test` |
+| `SelfTest.swift` | `--self-test` harness (per-layer accounting) and the core scenarios |
+| `SelfTestSuites.swift` | Unit (incl. property-based), contract (MCP/HTTP) and integration suites, including the end-to-end commit through the bridge |
 
 ## Concurrency
 
