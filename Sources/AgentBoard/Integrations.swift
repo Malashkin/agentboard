@@ -7,15 +7,24 @@ enum Integrations {
     static let hookPath = baseDir + "/bin/agentboard-hook"
     static let marker = "agentboard-hook"
     static var mcpURL: String { "http://127.0.0.1:\(AppSettings.port)/mcp" }
-    static let claudeSettings = home + "/.claude/settings.json"
-    static let codexConfig = home + "/.codex/config.toml"
+    /// Claude Code / Codex folders honour CLAUDE_CONFIG_DIR / CODEX_HOME, like the tools themselves —
+    /// so an isolated run never edits the real ~/.claude or ~/.codex.
+    static var claudeDir: String { env("CLAUDE_CONFIG_DIR") ?? home + "/.claude" }
+    static var codexDir: String { env("CODEX_HOME") ?? home + "/.codex" }
+    static var claudeSettings: String { claudeDir + "/settings.json" }
+    static var codexConfig: String { codexDir + "/config.toml" }
+    private static func env(_ k: String) -> String? {
+        ProcessInfo.processInfo.environment[k].flatMap { $0.isEmpty ? nil : $0 }
+    }
 
     static let hookScript = """
     #!/bin/bash
     # AgentBoard bridge: forwards agent and git events to the AgentBoard app on 127.0.0.1.
     # Never blocks or breaks the agent: if the app isn't running, it exits silently.
     [ -n "$AGENTBOARD_INTERNAL" ] && exit 0
-    PORT=$(cat "$HOME/.agentboard/port" 2>/dev/null || echo 7777)
+    # The port file sits next to bin/ (AGENTBOARD_BRIDGE_DIR, default ~/.agentboard).
+    BASE=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
+    PORT=$(cat "$BASE/port" 2>/dev/null || echo 7777)
     URL="http://127.0.0.1:$PORT"
     case "$1" in
       claude)
@@ -126,7 +135,7 @@ enum Integrations {
 
     static func installClaudeHooks() throws {
         writeBridge()
-        try FileManager.default.createDirectory(atPath: home + "/.claude", withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: claudeDir, withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: claudeSettings) && readJSON(claudeSettings) == nil {
             throw NSError(domain: "AgentBoard", code: 2, userInfo: [NSLocalizedDescriptionKey:
                 "~/.claude/settings.json contains invalid JSON — fix it manually and try again"])
@@ -185,7 +194,7 @@ enum Integrations {
     // MARK: Codex
 
     static var codexAvailable: Bool {
-        Shell.which("codex") != nil || FileManager.default.fileExists(atPath: home + "/.codex")
+        Shell.which("codex") != nil || FileManager.default.fileExists(atPath: codexDir)
     }
 
     static func codexInstalled() -> Bool {
@@ -193,7 +202,7 @@ enum Integrations {
         return t.contains("[mcp_servers.agentboard]") && codexHooksInstalled()
     }
 
-    static let codexHooks = home + "/.codex/hooks.json"
+    static var codexHooks: String { codexDir + "/hooks.json" }
 
     /// Codex hooks: live actions, permission requests answered from the app, reservations enforced on patches.
     /// Codex asks once to trust new hooks ("Hooks need review") — choose to trust them.
@@ -221,7 +230,7 @@ enum Integrations {
     }
 
     static func installCodex() throws {
-        try FileManager.default.createDirectory(atPath: home + "/.codex", withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: codexDir, withIntermediateDirectories: true)
         try installCodexHooks()
         backup(codexConfig)
         var text = (try? String(contentsOfFile: codexConfig)) ?? ""

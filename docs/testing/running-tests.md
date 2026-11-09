@@ -11,8 +11,16 @@ updated: 2026-11-09
 .build/release/AgentBoard --self-test   # run only
 ```
 
-Output is one line per check (`✓` / `✗ name — detail`) and `N passed, M failed`; the exit code is the
-number of failures. Temporary files are removed at the end.
+Output is one line per check (`✓` / `✗ name — detail`) grouped by layer (`[unit]`, `[contract]`,
+`[integration]`), a per-layer summary and `N passed, M failed`; the exit code is the number of failures.
+Temporary files are removed at the end. The run is deterministic and takes about 15 seconds.
+
+## Mutation gate
+
+```sh
+scripts/mutation-check.py /tmp/agentboard-mutants   # ~10–15 min; restores sources after each mutant
+```
+Don't edit sources while it runs. Every mutant must be KILLED; add or strengthen a check for any survivor.
 
 ## Isolated manual run
 

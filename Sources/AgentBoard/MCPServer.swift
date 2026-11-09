@@ -129,7 +129,9 @@ extension Core {
 
         if name == "register_agent" {
             let cwd = args.s("cwd")
-            guard let p = projectFor(cwd: cwd) ?? project else {
+            // Only a real match (cwd or an explicit project_path) — never the "single project" fallback,
+            // which would silently attach a client started elsewhere to the wrong project.
+            guard let p = projectFor(cwd: cwd) ?? args.str("project_path").flatMap({ projectFor(cwd: $0) }) else {
                 return ("Folder \(cwd) doesn't belong to any AgentBoard project. The human needs to add the project in the app.", true)
             }
             let tool = args.str("tool") ?? "codex"

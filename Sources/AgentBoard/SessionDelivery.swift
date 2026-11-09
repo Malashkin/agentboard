@@ -34,7 +34,7 @@ enum SessionDelivery {
         }
     }
 
-    private static func run(agentId: String, text: String, mode: DeliveryMode) -> String {
+    static func run(agentId: String, text: String, mode: DeliveryMode) -> String {
         let core = Core.shared
         guard let a = core.q.sync(execute: { core.agent(id: agentId) }) else { return "Agent not found" }
         let st = a.displayStatus(staleMinutes: AppSettings.staleMinutes)

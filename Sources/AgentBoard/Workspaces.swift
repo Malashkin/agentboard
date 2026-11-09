@@ -20,7 +20,8 @@ enum Workspaces {
             else if ch.isASCII && (ch.isLetter || ch.isNumber) { out.append(ch) }
             else if !out.hasSuffix("-") { out += "-" }
         }
-        return String(out.trimmingCharacters(in: CharacterSet(charactersIn: "-")).prefix(40))
+        // Cut first, then trim: a cut can end on a dash.
+        return String(out.prefix(40)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
 
     /// Creates (or reuses) the task's worktree. Returns path, branch, base branch.

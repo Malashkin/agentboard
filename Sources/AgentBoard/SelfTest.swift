@@ -5,12 +5,23 @@ import Foundation
 enum SelfTest {
     static var failures = 0
     static var passed = 0
+    /// unit · contract · integration — reported separately.
+    static var layer = "integration"
+    static var byLayer: [String: (pass: Int, fail: Int)] = [:]
+    static var failed: [String] = []
 
     static func check(_ ok: Bool, _ name: String, _ detail: @autoclosure () -> String = "") {
-        if ok { passed += 1; print("  ✓ \(name)") } else { failures += 1; print("  ✗ \(name)\(detail().isEmpty ? "" : " — \(detail())")") }
+        var c = byLayer[layer] ?? (0, 0)
+        if ok { passed += 1; c.pass += 1; print("  ✓ \(name)") } else {
+            failures += 1; c.fail += 1
+            let d = detail()
+            failed.append("[\(layer)] \(name)\(d.isEmpty ? "" : " — \(d)")")
+            print("  ✗ \(name)\(d.isEmpty ? "" : " — \(d)")")
+        }
+        byLayer[layer] = c
     }
 
-    static func section(_ s: String) { print("\n\(s)") }
+    static func section(_ s: String, layer l: String = "integration") { layer = l; print("\n[\(l)] \(s)") }
 
     /// Must run before anything touches Core.shared / Integrations (they read these at first use).
     static func prepareEnvironment() -> String {
@@ -54,7 +65,9 @@ enum SelfTest {
             return j
         }
 
-        section("Names and patterns")
+        unitSuite()
+
+        section("Names and patterns", layer: "unit")
         check(Core.englishName("Бэтмен-2") == "Batman-2", "legacy names map to English")
         check(Core.patternMatches("src/auth/", "src/auth/login.ts"), "folder pattern covers files below")
         check(!Core.patternMatches("src/auth", "src/authx/y.ts"), "folder pattern doesn't match a sibling prefix")
@@ -114,10 +127,22 @@ enum SelfTest {
         if let cid { core.q.sync { core.resolveCommit(id: cid, allow: true, comment: "", always: true) } }
         let cdec = ((codexAnswer.flatMap { parseJSON($0) as? JSON }?["hookSpecificOutput"] as? JSON)?["decision"] as? JSON) ?? [:]
         check(cdec.s("behavior") == "allow" && cdec["updatedPermissions"] == nil, "Codex gets a plain allow (no extra fields it rejects)")
+        var codexPlan: Data?
+        core.q.sync {
+            core.handleClaudeHook(ev("PermissionRequest", "cx1", ["tool_name": "ExitPlanMode", "tool_input": ["plan": "1. do it"]]),
+                                  agentTool: "codex") { codexPlan = $0 }
+        }
+        if let pid = core.q.sync(execute: { core.pending.values.first { $0.commit.kind == "plan" }?.commit.id }) {
+            core.q.sync { core.resolveCommit(id: pid, allow: true, comment: "") }
+        }
+        let pdec = ((codexPlan.flatMap { parseJSON($0) as? JSON }?["hookSpecificOutput"] as? JSON)?["decision"] as? JSON) ?? [:]
+        check(pdec.s("behavior") == "allow" && pdec["updatedInput"] == nil, "Codex never gets updatedInput, even for a plan")
         var dropped: Data? = Data("x".utf8)
         core.q.sync {
             core.handleClaudeHook(ev("PermissionRequest", "sB", ["tool_name": "Bash", "tool_input": ["command": "ls"]])) { dropped = $0 }
         }
+        _ = hook(ev("PostToolUse", "sB", ["tool_name": "Read", "tool_input": ["file_path": repo + "/a.txt"]]))
+        check(core.q.sync { core.pending.count } == 1, "a different tool finishing doesn't drop the request (parallel tool calls)")
         _ = hook(ev("PostToolUse", "sB", ["tool_name": "Bash", "tool_input": ["command": "ls"]]))
         check(dropped == nil && core.q.sync { core.pending.isEmpty }, "answered in the terminal → request leaves the app")
 
@@ -206,7 +231,7 @@ enum SelfTest {
         let left = core.q.sync { core.db.query("SELECT kind FROM events WHERE title LIKE 'ancient%'").map { $0.s("kind") } }
         check(left == ["commit"], "old detailed actions are cleaned, commits kept", "\(left)")
 
-        section("HTTP safety")
+        section("HTTP safety", layer: "contract")
         func route(_ method: String, _ path: String, _ headers: [String: String]) -> Int {
             var status = 0
             let req = HTTPRequest(method: method, path: path, query: [:], headers: headers, body: Data())
@@ -217,6 +242,15 @@ enum SelfTest {
         check(route("GET", "/api/board", ["host": "evil.example:7777"]) == 403, "DNS-rebinding host is refused")
         check(route("POST", "/api/decide", ["host": "127.0.0.1:7777", "origin": "https://evil.example"]) == 403, "cross-site POST is refused")
 
+        contractSuite(core: core, project: project)
+        integrationSuite(core: core, project: project, repo: repo, root: root)
+        gapSuite(core: core, project: project, repo: repo, root: root)
+
+        print("")
+        for l in ["unit", "contract", "integration"] {
+            let c = byLayer[l] ?? (0, 0)
+            print("\(l): \(c.pass) passed, \(c.fail) failed")
+        }
         print("\n\(passed) passed, \(failures) failed")
         try? FileManager.default.removeItem(atPath: root)
         return Int32(failures)

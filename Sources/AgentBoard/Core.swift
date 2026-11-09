@@ -80,6 +80,8 @@ final class Core {
     ]
 
     static func englishName(_ name: String) -> String? {
+        // Names like "Икс-23" contain digits themselves: try the whole name before splitting off a "-N" suffix.
+        if let i = legacyHeroNames.firstIndex(of: name) { return heroNames[i] }
         var base = name, suffix = ""
         if let r = name.range(of: #"-\d+$"#, options: .regularExpression) { base = String(name[..<r.lowerBound]); suffix = String(name[r]) }
         guard let i = legacyHeroNames.firstIndex(of: base) else { return nil }

@@ -41,7 +41,8 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 | Build (release) | `swift build -c release` |
 | Build the .app bundle | `./scripts/build-app.sh` → `dist/AgentBoard.app` |
 | Build + install to /Applications | `./scripts/build-app.sh --install` |
-| Test (end-to-end self-test) | `./scripts/test.sh` (or `.build/release/AgentBoard --self-test`) |
+| Test (self-test, 165 checks) | `./scripts/test.sh` (or `.build/release/AgentBoard --self-test`) |
+| Mutation gate | `scripts/mutation-check.py /tmp/agentboard-mutants` |
 | Run a debug instance | `.build/debug/AgentBoard -port 7788` |
 | Run fully isolated | `AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788` |
 | Install integrations from CLI | `/Applications/AgentBoard.app/Contents/MacOS/AgentBoard --install-claude [--install-codex]` |

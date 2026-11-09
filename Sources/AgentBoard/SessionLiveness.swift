@@ -71,7 +71,7 @@ final class SessionLiveness {
         return Double(tv.tv_sec)
     }
 
-    private func tick() {
+    func tick() {
         guard let live = liveSessions() else { return }
         seenAlive.formUnion(live.keys)
         let seen = seenAlive

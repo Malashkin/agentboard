@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in end-to-end self-test (`--self-test`, `scripts/test.sh`, 38 checks).
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 165 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.
 - Permission requests, questions and plans answered from the app (dashboard, menu bar).
@@ -39,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New app logo ("terminals").
 
 ### Fixed
+- The hook bridge read the port from `~/.agentboard/port` even when the bridge lived elsewhere (`AGENTBOARD_BRIDGE_DIR`), so isolated instances talked to the real app.
+- Installers wrote to the real `~/.claude` / `~/.codex` even when `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointed elsewhere.
+- Branch slugs could end with a dash after being cut to 40 characters.
+- The legacy name "Икс-23" was not migrated to "X-23".
+- `register_agent` from a folder outside every project was attached to the only project instead of being refused.
 - Dashboard flicker and lost input (unstable widget ids, global animation on refresh, feed overflowing its widget).
 - Agent cards reordering under the cursor on every action.
 - System-injected turns (task notifications) recorded as the human's request.

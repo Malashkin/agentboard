@@ -15,19 +15,35 @@ The project builds without Xcode, so there is no XCTest. Verification has three 
    `/mcp`, `/api/*` — for flows that need time (liveness) or the UI.
 3. **Window snapshots** (`AGENTBOARD_SNAPSHOT`) to check layout and rendering without screen-recording permission.
 
-## Covered by the self-test (38 checks)
+## Layers (165 checks)
 
-Names and patterns · sessions and unique names · reservations (grant, refuse, deny edit, no bookkeeping
-for denied edits, pre-commit refusal, holder's commit passes, Codex patch denied, Codex hook sessions) ·
-questions/permissions (answer reaches agent, Codex plain allow, answered in terminal → dropped) ·
-stuck detection and nudge · subagents · auto tasks and short replies · time report · session end → review ·
-worktree, diff, merge, removal · history import (once) · pinning · retention · HTTP host/origin safety.
+| Layer | Checks | What it pins down |
+|---|---|---|
+| Unit | 61 | git command recognition, reservation patterns (+ symmetry property), project mentions, Codex patch/command parsing, diff parser (+ properties: counts, line numbering), branch slugs (+ property: safe charset), shell quoting (+ property: round trip through `/bin/sh`), system-turn detection, work requests, legacy → English names, durations, timestamps |
+| Contract | 22 | MCP: initialize, exact tool list, schemas, error codes (−32700, −32601), notifications, batches; HTTP: status codes and bodies of every route, Host/Origin refusals |
+| Integration | 82 | Sessions and names, reservations (edit deny, pre-commit), questions/permissions (Claude + Codex, parallel tools), stuck detection, subagents, auto tasks and time, worktree/diff/merge, history import, pinning, retention, Codex log, installers inside `CLAUDE_CONFIG_DIR`/`CODEX_HOME`, git hook placement, **end to end: real HTTP server + real bridge + real `git commit`**, session liveness, MCP tool rules, message delivery, inputs of model-written texts |
+
+Property-based checks use a seeded generator (`SeededRNG`), so every run sees the same cases.
+
+## Quality gate: mutation testing
+
+`scripts/mutation-check.py` applies hand-picked mutants to the riskiest rules (one at a time), rebuilds and
+runs the self-test; each mutant must be killed. Results are in `TEST_RESULTS.md`. No Swift mutation tool
+works without Xcode, hence the script.
+
+## Coverage (diagnostic)
+
+```sh
+swift build -c debug --build-path /tmp/abcov -Xswiftc -profile-generate -Xswiftc -profile-coverage-mapping
+LLVM_PROFILE_FILE=/tmp/abcov/ab.profraw /tmp/abcov/debug/AgentBoard --self-test
+xcrun llvm-profdata merge -sparse /tmp/abcov/ab.profraw -o /tmp/abcov/ab.profdata
+xcrun llvm-cov report /tmp/abcov/debug/AgentBoard -instr-profile=/tmp/abcov/ab.profdata -ignore-filename-regex='Views/|SelfTest'
+```
 
 ## Not covered (manual)
 
-SwiftUI views, notifications and their actions, terminal typing (AppleScript/tmux), launching agents in
-Terminal, Codex log parsing against real logs, installers' edits of real config files, model-generated
-text (narrator, titles, digest, summary).
+SwiftUI views, `Store`, notifications and their actions, typing into real terminals (AppleScript/tmux),
+launching agents in Terminal, git status polling, model-generated text itself.
 
 ## Rule
 
