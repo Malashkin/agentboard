@@ -126,10 +126,6 @@ final class Store: ObservableObject {
         return activeAgents().filter { status($0) == .waiting && !withRequest.contains($0.id) }.count + pending.count
     }
 
-    func todayEvents(kind: String, project: String? = nil) -> [EventItem] {
-        let start = Calendar.current.startOfDay(for: now).timeIntervalSince1970
-        return events.filter { $0.kind == kind && $0.createdAt >= start && (project == nil || $0.projectId == project) }
-    }
 
     // MARK: Actions (forwarded to Core)
 

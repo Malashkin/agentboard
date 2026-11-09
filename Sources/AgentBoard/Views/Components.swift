@@ -69,18 +69,6 @@ struct StatTile: View {
     }
 }
 
-struct SectionHeader: View {
-    let title: String
-    var trailing: AnyView?
-    var body: some View {
-        HStack {
-            Text(title).font(.headline)
-            Spacer()
-            if let trailing { trailing }
-        }
-    }
-}
-
 /// Lightweight Markdown renderer: headings, bullets, quotes, code blocks, inline styles.
 struct MarkdownView: View {
     let text: String

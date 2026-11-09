@@ -38,12 +38,11 @@ enum SessionDelivery {
         let core = Core.shared
         guard let a = core.q.sync(execute: { core.agent(id: agentId) }) else { return "Agent not found" }
         let st = a.displayStatus(staleMinutes: AppSettings.staleMinutes)
-        let log: (String, String) -> Void = { kind, how in
+        let log: (String) -> Void = { how in
             core.q.async {
                 core.addEvent(project: a.projectId, agent: nil, kind: "message",
                               title: "You → \(a.name) (\(how)): \(text.oneLine.trunc(160))", detail: text)
                 core.changed()
-                _ = kind
             }
         }
         func toInbox() -> String {
@@ -57,14 +56,14 @@ enum SessionDelivery {
         case .inbox:
             return toInbox()
         case .terminal:
-            if let how = typeIntoTerminal(a, text) { log("message", how); return "Sent to \(a.name)'s terminal (\(how))." }
+            if let how = typeIntoTerminal(a, text) { log(how); return "Sent to \(a.name)'s terminal (\(how))." }
             return "Couldn't find \(a.name)'s terminal. Terminal.app, iTerm2 and tmux are supported; Claude Code needs at least one prompt after the hooks are installed. Try \"Into context\" or \"Resume in the background\"."
         case .resume:
             return resume(a, text)
         case .auto:
             if st == .working { return toInbox() }
             if st == .waiting || st == .idle || st == .stale, let how = typeIntoTerminal(a, text) {
-                log("message", how)
+                log(how)
                 return "\(a.name) was waiting for input — the comment was typed into its terminal (\(how)), and it is continuing."
             }
             return toInbox() + (st == .ended ? " The session is closed — to continue it now, choose \"Resume the session in the background\"." : "")

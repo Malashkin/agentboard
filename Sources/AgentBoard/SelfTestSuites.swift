@@ -387,7 +387,7 @@ extension SelfTest {
         check(agentRow("dead1")?.status != "ended", "a session never seen alive is not ended (no false 'closed')")
         check(agentRow("idle1")?.status == "idle", "a missed Stop is corrected from the session file", agentRow("idle1")?.status ?? "nil")
         try? FileManager.default.removeItem(atPath: sessions + "/\(me).json")
-        core.q.sync { core.db.query("UPDATE agents SET last_seen=? WHERE id=?", [now() - 100, live1.id]) }
+        core.q.sync { _ = core.db.query("UPDATE agents SET last_seen=? WHERE id=?", [now() - 100, live1.id]) }
         SessionLiveness.shared.tick(); core.q.sync {}
         check(agentRow("live1")?.status == "ended", "a session seen alive whose process is gone is ended")
         check(core.q.sync { core.activeReservations(project: project.id).filter { $0.agentId == live1.id }.isEmpty },

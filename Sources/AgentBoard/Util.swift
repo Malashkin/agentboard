@@ -64,9 +64,6 @@ extension String {
     func trunc(_ n: Int) -> String {
         count <= n ? self : String(prefix(n)) + "…"
     }
-    var firstLine: String {
-        split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? ""
-    }
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
     var oneLine: String {
         replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "  ", with: " ").trimmed
