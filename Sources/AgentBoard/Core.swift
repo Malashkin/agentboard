@@ -1127,6 +1127,14 @@ final class Core {
         if let origin = req.headers["origin"], !origin.hasPrefix("http://127.0.0.1"), !origin.hasPrefix("http://localhost") {
             reply(.json(["error": "forbidden origin"], status: 403)); return
         }
+        // DNS rebinding: a page on evil.com resolved to 127.0.0.1 sends same-origin GETs without Origin,
+        // but its Host header still says evil.com. Only our own names are accepted.
+        if let host = req.headers["host"] {
+            let name = host.split(separator: ":").first.map { String($0).lowercased() } ?? ""
+            if !["127.0.0.1", "localhost", "[::1]"].contains(name) {
+                reply(.json(["error": "forbidden host"], status: 403)); return
+            }
+        }
         let body = parseJSON(req.body)
         switch (req.method, req.path) {
         case ("GET", "/health"):
@@ -1157,6 +1165,24 @@ final class Core {
             reply(.empty(405))
         case ("DELETE", "/mcp"):
             reply(.empty(200))
+        case ("POST", "/api/tasks"):
+            // {"project_path", "title", "details", "client"} → the new task (same as "New task" in the app).
+            guard let j = body as? JSON, let p = projectFor(cwd: j.s("project_path")), let title = j.str("title") else {
+                reply(.json(["error": "need project_path of a known project and title"], status: 400)); return
+            }
+            let t = createTask(project: p.id, title: title, details: j.s("details"), client: j.str("client") ?? p.client,
+                               status: .backlog, assignee: nil, createdBy: "user")
+            reply(.json(["id": t.id, "title": t.title]))
+        case ("POST", "/api/tasks/launch"):
+            // {"task_id", "tool": "claude"|"codex", "isolated": true} — same as "Start agent" in the task.
+            guard let j = body as? JSON, let id = j.oi("task_id"), let t = task(id: id), let p = project(id: t.projectId) else {
+                reply(.json(["error": "task not found"], status: 404)); return
+            }
+            let tool = j.str("tool") ?? "claude", isolated = j["isolated"] as? Bool ?? true
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { reply(.json(["ok": true, "result": try Workspaces.launch(task: t, project: p, tool: tool, isolated: isolated)])) }
+                catch { reply(.json(["error": error.localizedDescription], status: 500)) }
+            }
         case ("GET", "/api/pending"):
             reply(.json(["pending": pending.values.map { e -> JSON in
                 let c = e.commit

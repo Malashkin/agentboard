@@ -206,6 +206,17 @@ enum SelfTest {
         let left = core.q.sync { core.db.query("SELECT kind FROM events WHERE title LIKE 'ancient%'").map { $0.s("kind") } }
         check(left == ["commit"], "old detailed actions are cleaned, commits kept", "\(left)")
 
+        section("HTTP safety")
+        func route(_ method: String, _ path: String, _ headers: [String: String]) -> Int {
+            var status = 0
+            let req = HTTPRequest(method: method, path: path, query: [:], headers: headers, body: Data())
+            core.q.sync { core.route(req) { status = $0.status } }
+            return status
+        }
+        check(route("GET", "/api/board", ["host": "127.0.0.1:7777"]) == 200, "local requests are served")
+        check(route("GET", "/api/board", ["host": "evil.example:7777"]) == 403, "DNS-rebinding host is refused")
+        check(route("POST", "/api/decide", ["host": "127.0.0.1:7777", "origin": "https://evil.example"]) == 403, "cross-site POST is refused")
+
         print("\n\(passed) passed, \(failures) failed")
         try? FileManager.default.removeItem(atPath: root)
         return Int32(failures)
