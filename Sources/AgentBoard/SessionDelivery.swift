@@ -188,7 +188,7 @@ enum SessionDelivery {
             p.executableURL = URL(fileURLWithPath: exe)
             p.arguments = args
             p.currentDirectoryURL = URL(fileURLWithPath: a.cwd)
-            var env = ProcessInfo.processInfo.environment
+            var env = Shell.cleanEnvironment
             env["PATH"] = Shell.extraPath + ":" + (env["PATH"] ?? "")
             env.removeValue(forKey: "AGENTBOARD_INTERNAL")
             p.environment = env

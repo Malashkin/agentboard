@@ -88,6 +88,14 @@ enum Shell {
                 "/usr/bin", "/bin", "/usr/sbin", "/sbin"].joined(separator: ":")
     }
 
+    /// Our environment minus a Claude Code session's own variables: if the app was started from a
+    /// Claude Code terminal, `claude -p` runs must not count as child sessions of that session.
+    static var cleanEnvironment: [String: String] {
+        ProcessInfo.processInfo.environment.filter { k, _ in
+            !(k == "CLAUDECODE" || k == "CLAUDE_PID" || k == "CLAUDE_EFFORT" || k.hasPrefix("CLAUDE_CODE_"))
+        }
+    }
+
     /// Runs a program. Output is read concurrently, so large outputs don't deadlock.
     static func run(_ exe: String, _ args: [String], cwd: String? = nil, input: String? = nil,
                     env: [String: String] = [:], timeout: TimeInterval = 20) -> Result {
@@ -97,7 +105,7 @@ enum Shell {
         if let cwd, FileManager.default.fileExists(atPath: cwd) {
             p.currentDirectoryURL = URL(fileURLWithPath: cwd)
         }
-        var environment = ProcessInfo.processInfo.environment
+        var environment = cleanEnvironment
         environment["PATH"] = extraPath + ":" + (environment["PATH"] ?? "")
         environment["AGENTBOARD_INTERNAL"] = "1"
         environment["GIT_OPTIONAL_LOCKS"] = "0"
