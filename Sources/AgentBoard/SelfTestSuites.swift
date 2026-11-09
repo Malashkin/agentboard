@@ -135,6 +135,25 @@ extension SelfTest {
         }
         check(quoteOK, "property: shell-quoted strings reach the program unchanged (60 random strings)", failedSample.debugDescription)
 
+        section("Security helpers", layer: "unit")
+        for (ct, simple) in [("text/plain", true), ("TEXT/PLAIN; charset=utf-8", true), ("application/x-www-form-urlencoded", true),
+                             ("multipart/form-data; boundary=x", true), (nil, true), ("application/json", false), ("application/octet-stream", false)] as [(String?, Bool)] {
+            check(Core.isBrowserSimpleContentType(ct) == simple, "content type \(ct ?? "none") is \(simple ? "" : "not ")browser-simple")
+        }
+        check(Core.isTTYName("ttys004") && !Core.isTTYName("ttys") && !Core.isTTYName("../ttys1") && !Core.isTTYName("ttys1; rm"),
+              "only ttysNNN is accepted as a terminal name")
+        let args = SummaryService.modelArguments
+        func hasEmptyTools(_ a: [String]) -> Bool { a.indices.contains { a[$0] == "--tools" && $0 + 1 < a.count && a[$0 + 1].isEmpty } }
+        check(hasEmptyTools(args) && args.contains("--safe-mode") && args.contains("--no-session-persistence"),
+              "M1: the evening summary runs claude without tools, MCP or a saved session", args.joined(separator: " "))
+        let m = Shell.modelArgs(model: "haiku")
+        check(hasEmptyTools(m) && m.contains("--safe-mode") && m.suffix(2) == ["--model", "haiku"], "every model call uses the same restricted arguments")
+        check(SessionDelivery.agentInForeground(psOutput: "Ss   -zsh\nS+   claude", tool: "claude"), "M3: claude in the foreground → may type")
+        check(!SessionDelivery.agentInForeground(psOutput: "Ss+  -zsh\nS    claude", tool: "claude"), "M3: shell in the foreground (agent exited or in background) → don't type")
+        check(!SessionDelivery.agentInForeground(psOutput: "S+   vim", tool: "claude"), "M3: another program in the foreground → don't type")
+        check(SessionDelivery.agentInForeground(psOutput: "Ss   -bash\nS+   /usr/local/bin/codex", tool: "codex"), "M3: codex by full path → may type")
+        check(!SessionDelivery.agentInForeground(psOutput: "", tool: "claude"), "M3: no processes → don't type")
+
         section("Prompts, names, time, timestamps", layer: "unit")
         check(Core.isSystemPrompt("<task-notification>\n<task-id>x</task-id>") && Core.isSystemPrompt("  <system-reminder>hi"), "system turns recognized")
         check(!Core.isSystemPrompt("Please fix <b>bold</b> in the header"), "a human prompt that contains a tag is not a system turn")
@@ -191,7 +210,8 @@ extension SelfTest {
         section("HTTP routes", layer: "contract")
         func call(_ method: String, _ path: String, _ body: Any? = nil, query: [String: String] = [:]) -> (Int, JSON?) {
             var status = 0, out: Data?
-            let req = HTTPRequest(method: method, path: path, query: query, headers: ["host": "127.0.0.1:7777"],
+            let req = HTTPRequest(method: method, path: path, query: query,
+                                  headers: ["host": "127.0.0.1:7777", "content-type": "application/json"],
                                   body: body.map { jsonData($0) } ?? Data())
             core.q.sync { core.route(req) { status = $0.status; out = $0.body } }
             // Async routes (launch) reply off the queue; give them a moment.
@@ -208,6 +228,29 @@ extension SelfTest {
         let created = call("POST", "/api/tasks", ["project_path": project.path, "title": "Contract task"])
         check(created.0 == 200 && (created.1?["id"] as? Int ?? 0) > 0 && created.1?.s("title") == "Contract task", "create task → 200 {id, title}")
         check(call("POST", "/api/tasks/launch", ["task_id": 999_999]).0 == 404, "launch an unknown task → 404")
+        section("Browser requests are refused (H1)", layer: "contract")
+        func raw(_ method: String, _ path: String, _ headers: [String: String], _ body: String = "{}") -> Int {
+            var status = 0
+            var h = ["host": "127.0.0.1:7777"]
+            for (k, v) in headers { h[k] = v }
+            let req = HTTPRequest(method: method, path: path, query: [:], headers: h, body: Data(body.utf8))
+            core.q.sync { core.route(req) { status = $0.status } }
+            return status
+        }
+        let listCall = #"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#
+        check(raw("POST", "/mcp", ["origin": "http://127.0.0.1.evil.example", "content-type": "text/plain"], listCall) == 403,
+              "regression: a look-alike origin (127.0.0.1.evil.example) is refused")
+        check(raw("POST", "/mcp", ["origin": "http://localhost.evil.example", "content-type": "application/json"], listCall) == 403,
+              "regression: localhost.evil.example is refused")
+        check(raw("GET", "/health", ["origin": "http://127.0.0.1:7777"]) == 403, "any Origin at all is refused (browsers only)")
+        check(raw("POST", "/mcp", ["content-type": "text/plain"], listCall) == 415, "text/plain POST (no-preflight browser request) → 415")
+        check(raw("POST", "/mcp", ["content-type": "application/x-www-form-urlencoded"], listCall) == 415, "form POST → 415")
+        check(raw("POST", "/mcp", [:], listCall) == 415, "POST without a content type → 415")
+        check(raw("POST", "/mcp", ["content-type": "application/json; charset=utf-8"], listCall) == 200, "our clients' JSON POST is served")
+        check(raw("POST", "/hook/git-precommit", ["content-type": "application/octet-stream"], "/nowhere\na.txt") == 200,
+              "the git pre-commit bridge (binary body) is served")
+        check(raw("GET", "/health", [:]) == 200, "plain GET without Origin is served")
+
         let pending = call("GET", "/api/pending")
         check(pending.0 == 200 && pending.1?["pending"] is [Any], "GET /api/pending → {pending: [...]}")
     }

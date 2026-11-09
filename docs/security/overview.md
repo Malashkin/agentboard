@@ -23,9 +23,13 @@ updated: 2026-11-09
 
 ## Controls in place
 
-- Listener bound to loopback; `Host` must be `127.0.0.1`/`localhost` (DNS rebinding); cross-site `Origin` refused.
+- Listener bound to loopback; `Host` must be `127.0.0.1`/`localhost` (DNS rebinding).
+- Any request carrying an `Origin` header is refused (403) — only browsers send it; POSTs with a browser-"simple"
+  content type (`text/plain`, forms, none) are refused (415), so a web page can't reach the server without a preflight it never gets.
 - Parameterized SQL; processes spawned with argv; terminal launch command fully quoted.
-- Model calls without tools for narrator, titles and digest; Claude session variables stripped.
+- Every model call (narrator, titles, digest, evening summary) runs `claude -p --tools "" --safe-mode --no-session-persistence`
+  (`Shell.modelArgs`); the summary's data is delimited and declared untrusted. Claude session variables stripped.
+- Text is typed into a terminal only when the agent is that terminal's foreground process; tty names must be `ttysNNN`.
 - Reservations enforced on edits and commits; human commits never blocked; hooks fail open.
 - "Allow for this session" never persists rules; Codex answers are plain allow/deny.
 - Config edits backed up; only AgentBoard's own entries touched. No secrets in the repository.
@@ -34,11 +38,11 @@ updated: 2026-11-09
 
 | ID | Severity | Summary | Planned fix |
 |---|---|---|---|
-| H1 | High | `Origin` checked by prefix — look-alike domains pass; text/plain POSTs need no preflight | Exact origin match / reject any Origin; JSON-only POSTs |
-| H2 | High | No authentication on hooks/MCP/API; MCP accepts an agent name as identity | Per-install token (0600) for bridge, MCP and API; ids-only identity |
-| M1 | Medium | Evening summary runs `claude -p` with tools while `mcp__agentboard` is auto-allowed | Run without tools / safe mode |
-| M2 | Medium | Peer-agent messages injected with platform authority; free agent names | Frame as untrusted; validate names |
-| M3 | Medium | Terminal typing doesn't verify the agent is in the foreground | Foreground-process check; strict tty format |
+| H1 | High | `Origin` checked by prefix — look-alike domains passed; text/plain POSTs needed no preflight | ✅ Fixed 2026-11-09: any Origin → 403, simple content types → 415 |
+| H2 | High | No authentication on hooks/MCP/API; MCP accepts an agent name as identity | Open — per-install token (0600) for bridge, MCP and API; ids-only identity |
+| M1 | Medium | Evening summary ran `claude -p` with tools while `mcp__agentboard` is auto-allowed | ✅ Fixed 2026-11-09: no tools / safe mode, data delimited as untrusted |
+| M2 | Medium | Peer-agent messages injected with platform authority; free agent names | Open — frame as untrusted; validate names |
+| M3 | Medium | Terminal typing didn't verify the agent is in the foreground | ✅ Fixed 2026-11-09: foreground-process check; strict tty format |
 | L1–L3 | Low | `~/.agentboard` world-readable; clickable links in model/agent Markdown; no request limits | 0700/0600; plain links; limits |
 
 Status and order: [product/roadmap.md](../product/roadmap.md).

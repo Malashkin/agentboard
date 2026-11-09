@@ -81,8 +81,7 @@ final class AwayWatcher {
             LOG:
             \(facts.trunc(20000))
             """
-            let r = Shell.run(claude, ["-p", "--model", AppSettings.narratorModel, "--tools", "", "--no-session-persistence",
-                                       "--safe-mode", "--output-format", "text"],
+            let r = Shell.run(claude, Shell.modelArgs(model: AppSettings.narratorModel),
                               cwd: core.supportDir.path, input: prompt, timeout: 90)
             let text = r.out.trimmed
             DispatchQueue.main.async {

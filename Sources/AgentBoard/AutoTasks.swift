@@ -78,8 +78,7 @@ final class TaskAutopilot {
 
     private func ask(_ prompt: String) -> String? {
         guard !AppDelegate.isTesting, let claude = Shell.which("claude") else { return nil }
-        let r = Shell.run(claude, ["-p", "--model", AppSettings.narratorModel, "--tools", "", "--no-session-persistence",
-                                   "--safe-mode", "--output-format", "text"],
+        let r = Shell.run(claude, Shell.modelArgs(model: AppSettings.narratorModel),
                           cwd: Core.shared.supportDir.path, input: prompt, timeout: 60)
         let out = r.out.trimmed
         return r.ok && !out.isEmpty ? out : nil

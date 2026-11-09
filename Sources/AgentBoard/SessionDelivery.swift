@@ -77,7 +77,11 @@ enum SessionDelivery {
         let line = (prefix + text).oneLine
         var tty = a.tty
         if tty.isEmpty || a.tool == "codex" { tty = findTTY(tool: a.tool, cwd: a.cwd) ?? tty }
-        guard tty.hasPrefix("/dev/ttys") else { return nil }
+        guard tty.hasPrefix("/dev/"), Core.isTTYName(String(tty.dropFirst(5))) else { return nil }
+        // Typed text ends with Enter: if the agent has exited and the tab is back at a shell prompt, the shell
+        // would run it as a command. Only type when the agent itself is the foreground process of that terminal.
+        let ps = Shell.run("/bin/ps", ["-t", String(tty.dropFirst(5)), "-o", "stat=,comm="], timeout: 5)
+        guard Self.agentInForeground(psOutput: ps.out, tool: a.tool) else { return nil }
 
         if let pane = tmuxPane(tty: tty) {
             let tmux = Shell.which("tmux") ?? "tmux"
@@ -143,6 +147,17 @@ enum SessionDelivery {
             if f.count == 2, String(f[0]) == tty { return String(f[1]) }
         }
         return nil
+    }
+
+    /// `ps -t <tty> -o stat=,comm=` output → is a claude/codex process in the terminal's foreground group (`+`)?
+    static func agentInForeground(psOutput: String, tool: String) -> Bool {
+        let names = tool == "codex" ? ["codex", "codex-cli"] : ["claude", "node"]
+        return psOutput.split(separator: "\n").contains { line in
+            let f = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard f.count == 2, f[0].contains("+") else { return false }
+            let name = URL(fileURLWithPath: f[1].trimmingCharacters(in: .whitespaces)).lastPathComponent
+            return names.contains(name)
+        }
     }
 
     /// Finds the terminal of a running agent process by its working directory.

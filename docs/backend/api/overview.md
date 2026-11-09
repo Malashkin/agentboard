@@ -24,9 +24,14 @@ updated: 2026-11-09
 
 ## Authentication
 
-None at the moment. Requests with a non-local `Host` header are refused (403, DNS-rebinding defense);
-requests whose `Origin` doesn't start with `http://127.0.0.1` / `http://localhost` are refused (403).
-Both are known to be insufficient — see [security/overview.md](../../security/overview.md).
+No credentials yet (audit H2, open). What protects the server today:
+
+- `Host` must be `127.0.0.1`, `localhost` or `[::1]` → otherwise 403 (DNS rebinding).
+- Any `Origin` header → 403. Hooks, git hooks and MCP clients never send one; browsers always do.
+- `POST` must not use a browser-"simple" content type (`text/plain`, `application/x-www-form-urlencoded`,
+  `multipart/form-data`, or none) → otherwise 415. Use `application/json` (or `application/octet-stream` for raw bodies).
+
+See [security/overview.md](../../security/overview.md).
 
 ## Errors
 
@@ -34,5 +39,6 @@ Both are known to be insufficient — see [security/overview.md](../../security/
 |---|---|
 | 400 | Missing or invalid fields (JSON body) |
 | 403 | Forbidden origin or host |
+| 415 | POST with a browser-simple or missing content type |
 | 404 | Unknown path, task or pending request |
 | 500 | Operation failed (message in `error`) |

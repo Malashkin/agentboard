@@ -961,6 +961,19 @@ final class Core {
         }
     }
 
+    /// "ttys004" — the only shape of terminal name we accept from hooks.
+    static func isTTYName(_ s: String) -> Bool {
+        s.range(of: #"^ttys[0-9]{1,4}$"#, options: .regularExpression) != nil
+    }
+
+    /// Content types a web page may POST cross-site without a preflight (CORS "simple" requests).
+    static func isBrowserSimpleContentType(_ value: String?) -> Bool {
+        guard let v = value?.lowercased().split(separator: ";").first?.trimmingCharacters(in: .whitespaces), !v.isEmpty else {
+            return true  // a browser sends text/plain for a string body; no content type is not one of ours either
+        }
+        return ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data"].contains(v)
+    }
+
     /// Turns started by Claude Code itself (background task results, reminders), not typed by the human.
     static func isSystemPrompt(_ p: String) -> Bool {
         let t = p.trimmed
@@ -1125,9 +1138,15 @@ final class Core {
     // MARK: - Routing
 
     func route(_ req: HTTPRequest, _ reply: @escaping (HTTPResponse) -> Void) {
-        // Browsers always send Origin on cross-site POSTs; agents and curl don't. Blocks drive-by requests from web pages.
-        if let origin = req.headers["origin"], !origin.hasPrefix("http://127.0.0.1"), !origin.hasPrefix("http://localhost") {
+        // Our clients (hooks via curl, git hooks, MCP clients of Claude Code / Codex) never send Origin; browsers do.
+        // Any Origin means a web page → refused. (A prefix check let "http://127.0.0.1.evil.com" through.)
+        if req.headers["origin"] != nil {
             reply(.json(["error": "forbidden origin"], status: 403)); return
+        }
+        // Defense in depth: a page can only send "simple" content types without a CORS preflight
+        // (which this server never answers). Our clients send JSON / binary.
+        if req.method == "POST", Self.isBrowserSimpleContentType(req.headers["content-type"]) {
+            reply(.json(["error": "unsupported content type"], status: 415)); return
         }
         // DNS rebinding: a page on evil.com resolved to 127.0.0.1 sends same-origin GETs without Origin,
         // but its Host header still says evil.com. Only our own names are accepted.
@@ -1144,7 +1163,7 @@ final class Core {
         case ("POST", "/hook/claude"):
             guard let j = body as? JSON else { reply(.empty()); return }
             var jj = j
-            if let tty = req.query["tty"], tty.hasPrefix("ttys") { jj["_tty"] = "/dev/" + tty }
+            if let tty = req.query["tty"], Self.isTTYName(tty) { jj["_tty"] = "/dev/" + tty }
             handleClaudeHook(jj, agentTool: req.query["tool"] == "codex" ? "codex" : "claude") { data in
                 if let data { reply(HTTPResponse(status: 200, body: data)) } else { reply(.empty()) }
             }

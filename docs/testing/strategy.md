@@ -15,12 +15,12 @@ The project builds without Xcode, so there is no XCTest. Verification has three 
    `/mcp`, `/api/*` — for flows that need time (liveness) or the UI.
 3. **Window snapshots** (`AGENTBOARD_SNAPSHOT`) to check layout and rendering without screen-recording permission.
 
-## Layers (165 checks)
+## Layers (189 checks)
 
 | Layer | Checks | What it pins down |
 |---|---|---|
-| Unit | 61 | git command recognition, reservation patterns (+ symmetry property), project mentions, Codex patch/command parsing, diff parser (+ properties: counts, line numbering), branch slugs (+ property: safe charset), shell quoting (+ property: round trip through `/bin/sh`), system-turn detection, work requests, legacy → English names, durations, timestamps |
-| Contract | 22 | MCP: initialize, exact tool list, schemas, error codes (−32700, −32601), notifications, batches; HTTP: status codes and bodies of every route, Host/Origin refusals |
+| Unit | 76 | git command recognition, reservation patterns (+ symmetry property), project mentions, Codex patch/command parsing, diff parser (+ properties: counts, line numbering), branch slugs (+ property: safe charset), shell quoting (+ property: round trip through `/bin/sh`), system-turn detection, work requests, legacy → English names, durations, timestamps, security helpers (browser-simple content types, tty names, restricted model arguments, foreground-agent detection) |
+| Contract | 31 | MCP: initialize, exact tool list, schemas, error codes (−32700, −32601), notifications, batches; HTTP: status codes and bodies of every route, Host/Origin refusals, look-alike origins (regression H1), 415 for browser-simple POSTs |
 | Integration | 82 | Sessions and names, reservations (edit deny, pre-commit), questions/permissions (Claude + Codex, parallel tools), stuck detection, subagents, auto tasks and time, worktree/diff/merge, history import, pinning, retention, Codex log, installers inside `CLAUDE_CONFIG_DIR`/`CODEX_HOME`, git hook placement, **end to end: real HTTP server + real bridge + real `git commit`**, session liveness, MCP tool rules, message delivery, inputs of model-written texts |
 
 Property-based checks use a seeded generator (`SeededRNG`), so every run sees the same cases.

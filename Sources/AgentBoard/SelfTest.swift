@@ -240,7 +240,8 @@ enum SelfTest {
         }
         check(route("GET", "/api/board", ["host": "127.0.0.1:7777"]) == 200, "local requests are served")
         check(route("GET", "/api/board", ["host": "evil.example:7777"]) == 403, "DNS-rebinding host is refused")
-        check(route("POST", "/api/decide", ["host": "127.0.0.1:7777", "origin": "https://evil.example"]) == 403, "cross-site POST is refused")
+        check(route("POST", "/api/decide", ["host": "127.0.0.1:7777", "origin": "https://evil.example", "content-type": "application/json"]) == 403,
+              "cross-site POST is refused")
 
         contractSuite(core: core, project: project)
         integrationSuite(core: core, project: project, repo: repo, root: root)

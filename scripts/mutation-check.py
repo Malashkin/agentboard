@@ -51,6 +51,18 @@ MUTANTS = [
      "lines.insert(preLine, at: 1)", "lines.append(preLine)"),
     ("Codex gets extra decision fields", "Coordination.swift",
      "if e.plain {\n", "if false {\n"),
+    ("[sec] H1 look-alike Origin accepted (old prefix check)", "Core.swift",
+     'if req.headers["origin"] != nil {',
+     'if let origin = req.headers["origin"], !origin.hasPrefix("http://127.0.0.1"), !origin.hasPrefix("http://localhost") {'),
+    ("[sec] H1 browser-simple POST accepted", "Core.swift",
+     'if req.method == "POST", Self.isBrowserSimpleContentType(req.headers["content-type"]) {', "if false {"),
+    ("[sec] M1 summary runs with tools", "SummaryService.swift",
+     "static var modelArguments: [String] { Shell.modelArgs(model: AppSettings.summaryModel) }",
+     'static var modelArguments: [String] { ["-p", "--output-format", "text"] }'),
+    ("[sec] M3 typing ignores the foreground flag", "SessionDelivery.swift",
+     'guard f.count == 2, f[0].contains("+") else { return false }', "guard f.count == 2 else { return false }"),
+    ("[sec] M3 any tty name accepted", "Core.swift",
+     's.range(of: #"^ttys[0-9]{1,4}$"#, options: .regularExpression) != nil', 's.hasPrefix("ttys")'),
 ]
 
 def run(cmd, **kw):

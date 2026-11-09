@@ -16,7 +16,7 @@ updated: 2026-11-09
 | `codex-hook` | Codex hook JSON on stdin | `POST /hook/claude?tool=codex&tty=…` |
 | `codex` | Codex `notify` JSON as last argument | `POST /hook/codex` |
 | `git-post-commit` | — | `POST /hook/git` `{"cwd","hash"}` (async) |
-| `git-pre-commit` | — | `POST /hook/git-precommit` (root + staged files, text); non-empty answer → message on stderr, exit 1 |
+| `git-pre-commit` | — | `POST /hook/git-precommit` (`application/octet-stream`: root + staged files, one per line); non-empty answer → message on stderr, exit 1 |
 
 The bridge reads the port from the `port` file next to its own `bin/` folder (`~/.agentboard/port`, or
 `$AGENTBOARD_BRIDGE_DIR/port` for an isolated instance), so a test instance's hooks never reach the real app.

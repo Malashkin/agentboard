@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 165 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 189 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.
@@ -57,6 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unused logo concept images from `docs/assets`.
 
 ### Security
+- Web pages can no longer reach the local server: any `Origin` header is refused and POSTs with browser-"simple" content types get 415 (audit H1 — a look-alike domain such as `127.0.0.1.evil.example` passed the old prefix check).
+- The evening summary runs `claude -p` without tools, MCP servers or a saved session, with its data marked untrusted (audit M1).
+- Messages are typed into a terminal only when the agent is its foreground process; terminal names from hooks are validated (audit M3).
 - Isolated runs can no longer edit the real Claude Code / Codex configuration (installers honour `CLAUDE_CONFIG_DIR` / `CODEX_HOME`).
 - Requests whose `Host` is not local are refused (DNS rebinding).
 - Known open issues from the 2026-11-09 audit are tracked in [security/overview.md](security/overview.md).

@@ -1,6 +1,6 @@
 # Test Results
 
-**Date:**     2026-11-09 18:49
+**Date:**     2026-11-09 19:20 (security fixes H1/M1/M3 added on top of the 18:49 run)
 **Commit:**   255e56e + working tree (tests and fixes from this run)
 **Stack:**    Swift 5.9 / SwiftPM · runner: `./scripts/test.sh` (`AgentBoard --self-test`; XCTest unavailable without Xcode — ADR-006)
 **App type:** native macOS desktop app with a local HTTP / MCP API (no web UI → no browser e2e)
@@ -21,8 +21,8 @@
 
 | Layer | Tests | Passed | Failed |
 |---|---|---|---|
-| Unit | 61 | 61 | 0 |
-| Contract | 22 | 22 | 0 |
+| Unit | 76 | 76 | 0 |
+| Contract | 31 | 31 | 0 |
 | Integration | 82 | 82 | 0 |
 | E2E (browser) | N/A — not a web UI; the end-to-end commit through the real bridge + git is in Integration | | |
 
@@ -32,8 +32,8 @@ Runs are deterministic (property checks use a seeded generator); three consecuti
 
 | Metric | Value |
 |---|---|
-| Mutants generated | 18 (hand-picked on the riskiest rules) |
-| Mutants killed | 18 |
+| Mutants generated | 23 (hand-picked; 5 of them re-introduce H1/M1/M3) |
+| Mutants killed | 23 |
 | Mutation score | 100% |
 | Surviving (open) | 0 |
 | Surviving (justified) | 0 |
@@ -88,6 +88,13 @@ integration: 82 passed, 0 failed
 
 ### ❌ "installed once, existing hook kept"
 - **Layer:** integration · **Fix:** test — the bridge path itself contains "agentboard-hook"; count hook lines instead
+
+## Security fixes (H1, M1, M3)
+- Regression tests: "a look-alike origin (127.0.0.1.evil.example) is refused", "localhost.evil.example is refused",
+  "text/plain POST → 415", "M1: the evening summary runs claude without tools…", "M3: shell in the foreground → don't type".
+  The H1 case was reproduced red against the live app before the fix (`200` for the look-alike origin) and is `403` after.
+- Mutants re-introducing each issue (`[sec]` in `scripts/mutation-check.py`): 5/5 killed.
+- Not covered by an automated test: removing the foreground check at its call site in `typeIntoTerminal` (needs a real terminal).
 
 ## Notes
 - New test files: `Sources/AgentBoard/SelfTestSuites.swift`, `scripts/mutation-check.py`

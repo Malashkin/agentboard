@@ -26,7 +26,7 @@ Call the installed `claude` CLI in print mode with `--model haiku --tools "" --s
 
 ### Negative
 - Activity text goes to Anthropic.
-- The evening summary still runs with default tools (audit M1) — to be aligned.
+- (Resolved 2026-11-09) The evening summary now uses the same restricted arguments (`Shell.modelArgs`).
 
 ## Alternatives Considered
 

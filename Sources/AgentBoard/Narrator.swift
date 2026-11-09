@@ -50,8 +50,7 @@ final class Narrator {
         }
         for (a, ctx, latest) in jobs.prefix(3) {
             let st = a.displayStatus(staleMinutes: AppSettings.staleMinutes).rawValue
-            let r = Shell.run(claude, ["-p", "--model", AppSettings.narratorModel, "--tools", "", "--no-session-persistence",
-                                       "--safe-mode", "--output-format", "text"],
+            let r = Shell.run(claude, Shell.modelArgs(model: AppSettings.narratorModel),
                               cwd: core.supportDir.path, input: Self.instructions + "\n\n---- DATA ----\n" + ctx, timeout: 60)
             let text = r.out.trimmed.oneLine.trimmingCharacters(in: CharacterSet(charactersIn: "«»\"' ")).trunc(300)
             guard r.ok, !text.isEmpty else { failures += 1; continue }

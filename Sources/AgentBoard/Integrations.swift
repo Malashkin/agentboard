@@ -51,7 +51,7 @@ enum Integrations {
         files=$(git diff --cached --name-only 2>/dev/null)
         [ -z "$files" ] && exit 0
         resp=$( { printf '%s\n' "$top"; printf '%s\n' "$files"; } | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
-          -H 'Content-Type: text/plain' --data-binary @- "$URL/hook/git-precommit" 2>/dev/null)
+          -H 'Content-Type: application/octet-stream' --data-binary @- "$URL/hook/git-precommit" 2>/dev/null)
         if [ -n "$resp" ]; then printf '%s\n' "$resp" >&2; exit 1; fi
         ;;
       git-post-commit)

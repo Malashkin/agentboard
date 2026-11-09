@@ -85,6 +85,14 @@ enum Shell {
                 "/usr/bin", "/bin", "/usr/sbin", "/sbin"].joined(separator: ":")
     }
 
+    /// Arguments for every `claude -p` call the app makes: no tools, no MCP servers / hooks / CLAUDE.md
+    /// (safe mode), nothing saved. Text from agents is untrusted — the model must not be able to act on it.
+    static func modelArgs(model: String) -> [String] {
+        var a = ["-p", "--tools", "", "--safe-mode", "--no-session-persistence", "--output-format", "text"]
+        if !model.isEmpty { a += ["--model", model] }
+        return a
+    }
+
     /// Our environment minus a Claude Code session's own variables: if the app was started from a
     /// Claude Code terminal, `claude -p` runs must not count as child sessions of that session.
     static var cleanEnvironment: [String: String] {
