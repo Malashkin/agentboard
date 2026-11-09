@@ -10,10 +10,10 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: theme.density.spacing + 6) {
                 HStack {
-                    Text("Обзор").font(.largeTitle.bold())
+                    Text("Overview").font(.largeTitle.bold())
                     Spacer()
                     if !store.projects.isEmpty && !editing {
-                        Button { ThemeStore.animate { editing = true } } label: { Label("Настроить панель", systemImage: "square.grid.3x3.square") }
+                        Button { ThemeStore.animate { editing = true } } label: { Label("Customize dashboard", systemImage: "square.grid.3x3.square") }
                     }
                 }
                 if store.projects.isEmpty {
@@ -33,12 +33,12 @@ struct Onboarding: View {
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Как начать").font(.title2.bold())
-                Label("Откройте «Подключения» и подключите Claude Code (хуки + MCP) и, если пользуетесь, Codex.", systemImage: "1.circle.fill")
-                Label("Добавьте проект — папку git-репозитория, над которым работают агенты (кнопка внизу слева).", systemImage: "2.circle.fill")
-                Label("Запускайте Claude Code в разных терминалах в этой папке или её worktree — агенты появятся здесь и будут видеть друг друга.", systemImage: "3.circle.fill")
-                Label("Вечером AgentBoard соберёт сводку: что сделано по коду и по клиентам.", systemImage: "4.circle.fill")
-                Button("Открыть подключения") { selection = .integrations }.buttonStyle(.borderedProminent)
+                Text("Getting started").font(.title2.bold())
+                Label("Open Integrations and connect Claude Code (hooks + MCP) and, if you use it, Codex.", systemImage: "1.circle.fill")
+                Label("Add a project: the git repository folder your agents work in (button at the bottom left).", systemImage: "2.circle.fill")
+                Label("Run Claude Code in separate terminals in that folder or its worktrees. Agents will show up here and see each other.", systemImage: "3.circle.fill")
+                Label("In the evening, AgentBoard compiles a summary of what was done, by code and by client.", systemImage: "4.circle.fill")
+                Button("Open Integrations") { selection = .integrations }.buttonStyle(.borderedProminent)
             }
         }
     }
@@ -64,15 +64,15 @@ struct ProjectView: View {
                     }
                     Spacer()
                     if tab == 0 && !editing {
-                        Button { ThemeStore.animate { editing = true } } label: { Label("Настроить", systemImage: "square.grid.3x3.square") }
+                        Button { ThemeStore.animate { editing = true } } label: { Label("Customize", systemImage: "square.grid.3x3.square") }
                     }
                     Picker("", selection: Binding(get: { tab }, set: { v in ThemeStore.animate { tab = v } })) {
-                        Text("Панель").tag(0)
-                        Text("Агенты").tag(1)
-                        Text("Задачи").tag(2)
-                        Text("Лента").tag(3)
+                        Text("Dashboard").tag(0)
+                        Text("Agents").tag(1)
+                        Text("Tasks").tag(2)
+                        Text("Feed").tag(3)
                         Text("Git").tag(4)
-                        Text("Настройки").tag(5)
+                        Text("Settings").tag(5)
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 500)
@@ -92,7 +92,7 @@ struct ProjectView: View {
                 .transition(.opacity)
             }
         } else {
-            Text("Проект не найден").foregroundStyle(.secondary)
+            Text("Project not found").foregroundStyle(.secondary)
         }
     }
 }
@@ -123,18 +123,18 @@ struct FeedList: View {
         VStack(alignment: .leading, spacing: 10) {
             if showComposer, let projectId {
                 HStack {
-                    TextField("Заметка в ленту (видна агентам в board)…", text: $note).textFieldStyle(.roundedBorder)
+                    TextField("Post a note to the feed (agents see it via board)…", text: $note).textFieldStyle(.roundedBorder)
                         .onSubmit { post(projectId) }
-                    Button("Добавить") { post(projectId) }.disabled(note.trimmed.isEmpty)
+                    Button("Add") { post(projectId) }.disabled(note.trimmed.isEmpty)
                 }
             }
             HStack {
-                TextField("Поиск", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
-                Toggle("Все действия (запросы, команды, правки)", isOn: $showRoutine).toggleStyle(.checkbox)
+                TextField("Search", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                Toggle("All activity (requests, commands, edits)", isOn: $showRoutine).toggleStyle(.checkbox)
                 Spacer()
             }
             if items.isEmpty {
-                Text("Событий пока нет").foregroundStyle(.secondary).padding(.vertical, 20)
+                Text("No events yet").foregroundStyle(.secondary).padding(.vertical, 20)
             }
             if lazy {
                 LazyVStack(alignment: .leading, spacing: 0) { rows }
@@ -203,9 +203,9 @@ struct GitView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if let err = snap.error { Banner(text: err, color: .orange, icon: "exclamationmark.triangle") }
                 HStack {
-                    Text("Рабочие копии").font(.title2.bold())
+                    Text("Worktrees").font(.title2.bold())
                     Spacer()
-                    Button { GitMonitor.shared.refreshNow() } label: { Label("Обновить", systemImage: "arrow.clockwise") }
+                    Button { GitMonitor.shared.refreshNow() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 }
                 ForEach(snap.worktrees) { w in
                     let owner = store.agents(in: projectId).first { $0.isActive(staleMinutes: store.staleMinutes, at: store.now) && ($0.root == w.path || $0.cwd.hasPrefix(w.path)) }
@@ -213,11 +213,11 @@ struct GitView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Pill(text: w.branch, color: .purple, icon: "arrow.triangle.branch")
-                                if w.ahead > 0 { Pill(text: "↑\(w.ahead) не запушено", color: .blue) }
+                                if w.ahead > 0 { Pill(text: "↑\(w.ahead) not pushed", color: .blue) }
                                 if w.behind > 0 { Pill(text: "↓\(w.behind)", color: .gray) }
                                 if let owner { Pill(text: owner.name, color: .green, icon: "person") }
                                 Spacer()
-                                Text(w.changes.isEmpty ? "чисто" : "\(w.changes.count) незакоммиченных").smoothNumber(w.changes.count)
+                                Text(w.changes.isEmpty ? "clean" : "\(w.changes.count) uncommitted").smoothNumber(w.changes.count)
                                     .font(.caption).foregroundStyle(w.changes.isEmpty ? Color.secondary : Color.orange)
                             }
                             Text(w.path).font(.caption).foregroundStyle(.secondary)
@@ -228,8 +228,8 @@ struct GitView: View {
                         }
                     }
                 }
-                Text("Коммиты сегодня").font(.title2.bold())
-                if snap.todayCommits.isEmpty { Text("Пока нет").foregroundStyle(.secondary) }
+                Text("Today's commits").font(.title2.bold())
+                if snap.todayCommits.isEmpty { Text("None yet").foregroundStyle(.secondary) }
                 ForEach(snap.todayCommits) { c in
                     let agentEvent = store.events.first { $0.kind == "commit" && $0.ref.hasPrefix(c.hash) }
                     HStack(alignment: .top, spacing: 10) {
@@ -263,17 +263,17 @@ struct ProjectSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Проект") {
-                TextField("Название", text: $name)
-                TextField("Клиент по умолчанию", text: $client)
-                Text("Клиент подставляется в новые задачи и помогает группировать сводку по клиентам.").font(.caption).foregroundStyle(.secondary)
-                Button("Сохранить") { store.updateProject(project.id, name: name, client: client) }
+            Section("Project") {
+                TextField("Name", text: $name)
+                TextField("Default client", text: $client)
+                Text("The client is prefilled in new tasks and helps group the summary by client.").font(.caption).foregroundStyle(.secondary)
+                Button("Save") { store.updateProject(project.id, name: name, client: client) }
             }
-            Section("Подключение проекта") {
-                LabeledContent("git post-commit хук") {
+            Section("Project integration") {
+                LabeledContent("git post-commit hook") {
                     HStack {
-                        Text(gitHook ? "установлен" : "нет").foregroundStyle(gitHook ? .green : .orange)
-                        Button(gitHook ? "Удалить" : "Установить") {
+                        Text(gitHook ? "installed" : "not installed").foregroundStyle(gitHook ? .green : .orange)
+                        Button(gitHook ? "Remove" : "Install") {
                             if gitHook { Integrations.uninstallGitHook(project) } else {
                                 do { try Integrations.installGitHook(project) } catch { message = error.localizedDescription }
                             }
@@ -281,48 +281,48 @@ struct ProjectSettingsView: View {
                         }
                     }
                 }
-                Text("Ловит коммиты любого агента (включая Codex) во всех worktree проекта.").font(.caption).foregroundStyle(.secondary)
-                LabeledContent("Правила в AGENTS.md") {
+                Text("Captures commits from any agent (including Codex) across all of the project's worktrees.").font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Rules in AGENTS.md") {
                     HStack {
-                        Text(agentsMd ? "добавлены" : "нет").foregroundStyle(agentsMd ? .green : .secondary)
+                        Text(agentsMd ? "added" : "not added").foregroundStyle(agentsMd ? .green : .secondary)
                         if !agentsMd {
-                            Button("Добавить") {
+                            Button("Add") {
                                 do { try Integrations.installAgentsMd(project) } catch { message = error.localizedDescription }
                                 refresh()
                             }
                         }
                     }
                 }
-                Text("Нужно для Codex и других агентов без хуков: объясняет им, как пользоваться доской. Claude Code получает правила автоматически.")
+                Text("Needed for Codex and other agents without hooks: it explains how to use the board. Claude Code gets the rules automatically.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("История") {
-                LabeledContent("Прошлые сессии и коммиты") {
+            Section("History") {
+                LabeledContent("Past sessions and commits") {
                     if store.importing.contains(project.id) {
                         ProgressView().controlSize(.small)
                     } else {
-                        Button("Загрузить") { store.importHistory(project) }
+                        Button("Import") { store.importHistory(project) }
                     }
                 }
-                Text(store.importReport[project.id] ?? "Сессии Claude Code и Codex и коммиты за последние 60 дней, сделанные до подключения проекта. Повторная загрузка не создаёт дублей.")
+                Text(store.importReport[project.id] ?? "Claude Code and Codex sessions and commits from the last 60 days, made before the project was connected. Re-importing does not create duplicates.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Агенты") {
-                Button("Убрать завершённых и неактивных агентов") { store.purgeAgents(project: project.id) }
+            Section("Agents") {
+                Button("Clear finished and inactive agents") { store.purgeAgents(project: project.id) }
             }
             Section {
-                Button("Удалить проект из AgentBoard", role: .destructive) { confirmDelete = true }
+                Button("Remove project from AgentBoard", role: .destructive) { confirmDelete = true }
             }
         }
         .formStyle(.grouped)
         .onAppear { name = project.name; client = project.client; refresh() }
-        .confirmationDialog("Удалить «\(project.name)» из AgentBoard?", isPresented: $confirmDelete) {
-            Button("Удалить", role: .destructive) {
+        .confirmationDialog("Remove “\(project.name)” from AgentBoard?", isPresented: $confirmDelete) {
+            Button("Remove", role: .destructive) {
                 Integrations.uninstallGitHook(project)
                 store.removeProject(project.id)
             }
-        } message: { Text("История агентов, задачи и лента проекта будут удалены. Файлы проекта не трогаются.") }
-        .alert("Ошибка", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+        } message: { Text("The project's agent history, tasks and feed will be deleted. Project files are not touched.") }
+        .alert("Error", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") {}
         } message: { Text(message ?? "") }
     }

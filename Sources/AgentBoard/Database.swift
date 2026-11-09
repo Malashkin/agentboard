@@ -13,7 +13,7 @@ final class Database {
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         guard sqlite3_open_v2(path, &db, flags, nil) == SQLITE_OK else {
             throw NSError(domain: "AgentBoard.DB", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Не удалось открыть базу \(path)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Could not open database \(path)"])
         }
         exec("PRAGMA journal_mode=WAL;")
         exec("PRAGMA busy_timeout=3000;")

@@ -28,7 +28,7 @@ final class GitMonitor {
         var snap = GitSnapshot(updatedAt: now())
         let list = Shell.git(["worktree", "list", "--porcelain"], cwd: path)
         guard list.ok else {
-            snap.error = list.err.trimmed.isEmpty ? "не git-репозиторий" : list.err.trimmed
+            snap.error = list.err.trimmed.isEmpty ? "not a git repository" : list.err.trimmed
             return snap
         }
         var paths: [String] = []

@@ -44,7 +44,7 @@ final class HTTPServer {
         l.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready: self?.onState?(true, nil)
-            case .failed(let e): self?.onState?(false, "Порт \(self?.port ?? 0): \(e.localizedDescription)")
+            case .failed(let e): self?.onState?(false, "Port \(self?.port ?? 0): \(e.localizedDescription)")
             case .cancelled: self?.onState?(false, nil)
             default: break
             }

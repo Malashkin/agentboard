@@ -25,6 +25,12 @@ enum Integrations {
         curl -sf --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
           --data-binary @- "$URL/hook/claude?tty=$TTY" 2>/dev/null
         ;;
+      codex-hook)
+        # Codex hooks (~/.codex/hooks.json) use Claude Code's format: same handler, marked as Codex.
+        TTY=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
+        curl -sf --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
+          --data-binary @- "$URL/hook/claude?tool=codex&tty=$TTY" 2>/dev/null
+        ;;
       codex)
         # Codex `notify` passes the event JSON as the last argument.
         printf '%s' "${@: -1}" | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
@@ -123,7 +129,7 @@ enum Integrations {
         try FileManager.default.createDirectory(atPath: home + "/.claude", withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: claudeSettings) && readJSON(claudeSettings) == nil {
             throw NSError(domain: "AgentBoard", code: 2, userInfo: [NSLocalizedDescriptionKey:
-                "~/.claude/settings.json содержит невалидный JSON — исправьте его вручную и повторите"])
+                "~/.claude/settings.json contains invalid JSON — fix it manually and try again"])
         }
         backup(claudeSettings)
         var s = readJSON(claudeSettings) ?? [:]
@@ -161,7 +167,7 @@ enum Integrations {
 
     static func installClaudeMCP() throws {
         guard let claude = Shell.which("claude") else {
-            throw NSError(domain: "AgentBoard", code: 3, userInfo: [NSLocalizedDescriptionKey: "Не найден claude CLI"])
+            throw NSError(domain: "AgentBoard", code: 3, userInfo: [NSLocalizedDescriptionKey: "claude CLI not found"])
         }
         _ = Shell.run(claude, ["mcp", "remove", "--scope", "user", "agentboard"], timeout: 30)
         let r = Shell.run(claude, ["mcp", "add", "--scope", "user", "--transport", "http", "agentboard", mcpURL], timeout: 30)
@@ -184,11 +190,39 @@ enum Integrations {
 
     static func codexInstalled() -> Bool {
         guard let t = try? String(contentsOfFile: codexConfig) else { return false }
-        return t.contains("[mcp_servers.agentboard]")
+        return t.contains("[mcp_servers.agentboard]") && codexHooksInstalled()
+    }
+
+    static let codexHooks = home + "/.codex/hooks.json"
+
+    /// Codex hooks: live actions, permission requests answered from the app, reservations enforced on patches.
+    /// Codex asks once to trust new hooks ("Hooks need review") — choose to trust them.
+    static func installCodexHooks() throws {
+        if FileManager.default.fileExists(atPath: codexHooks) && readJSON(codexHooks) == nil {
+            throw NSError(domain: "AgentBoard", code: 3, userInfo: [NSLocalizedDescriptionKey: "~/.codex/hooks.json is not valid JSON — fix it and retry"])
+        }
+        backup(codexHooks)
+        var s = readJSON(codexHooks) ?? [:]
+        var hooks = strippedHooks(s["hooks"] as? JSON ?? [:])
+        let events: [(String, Int)] = [("SessionStart", 10), ("UserPromptSubmit", 10), ("PreToolUse", Int(AppSettings.approvalTimeout) + 30),
+                                       ("PermissionRequest", Int(AppSettings.permissionTimeout) + 30), ("PostToolUse", 5),
+                                       ("Stop", 10), ("SubagentStart", 5), ("SubagentStop", 5), ("SessionEnd", 3)]
+        for (ev, timeout) in events {
+            let group: JSON = ["hooks": [["type": "command", "command": "\(hookPath) codex-hook", "timeout": timeout]]]
+            hooks[ev] = ((hooks[ev] as? [JSON]) ?? []) + [group]
+        }
+        s["hooks"] = hooks
+        try writeJSON(s, codexHooks)
+    }
+
+    static func codexHooksInstalled() -> Bool {
+        guard let s = readJSON(codexHooks), let hooks = s["hooks"] as? JSON else { return false }
+        return ((hooks["PreToolUse"] as? [JSON]) ?? []).contains { g in ((g["hooks"] as? [JSON]) ?? []).contains { $0.s("command").contains(marker) } }
     }
 
     static func installCodex() throws {
         try FileManager.default.createDirectory(atPath: home + "/.codex", withIntermediateDirectories: true)
+        try installCodexHooks()
         backup(codexConfig)
         var text = (try? String(contentsOfFile: codexConfig)) ?? ""
         if !text.contains("[mcp_servers.agentboard]") {
@@ -219,7 +253,7 @@ enum Integrations {
     static func installGitHook(_ project: Project) throws {
         writeBridge()
         guard let dir = gitHooksDir(project) else {
-            throw NSError(domain: "AgentBoard", code: 5, userInfo: [NSLocalizedDescriptionKey: "Это не git-репозиторий"])
+            throw NSError(domain: "AgentBoard", code: 5, userInfo: [NSLocalizedDescriptionKey: "This is not a git repository"])
         }
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let path = dir + "/post-commit"
@@ -261,15 +295,15 @@ enum Integrations {
 
     static let agentsSnippet = """
     <!-- agentboard:start -->
-    ## AgentBoard: работа нескольких агентов
+    ## AgentBoard: multiple agents at work
 
-    Над проектом одновременно работают несколько агентов; человек видит всё в приложении AgentBoard.
-    Используй MCP-сервер `agentboard`:
-    1. В начале сессии вызови `register_agent(cwd)` (Claude Code регистрируется автоматически) и передавай `agent_id` во все вызовы.
-    2. `board` — кто что делает; `agent_activity(agent)` — подробности о конкретном агенте.
-    3. Бери задачу через `claim_task` / `create_task(claim=true)`, объявляй файлы через `set_focus`.
-    4. Не трогай файлы, которые правит другой агент; договаривайся через `send_message`.
-    5. По завершении — `update_task(status="review"|"done", note=...)`. Указывай `client`, если работа для клиента.
+    Several agents work on this project at the same time; the human sees everything in the AgentBoard app.
+    Use the `agentboard` MCP server:
+    1. At the start of a session call `register_agent(cwd)` (Claude Code registers automatically) and pass `agent_id` in every call.
+    2. `board` — who is doing what; `agent_activity(agent)` — details about a specific agent.
+    3. Take a task via `claim_task` / `create_task(claim=true)`, announce your files via `set_focus`.
+    4. Don't touch files another agent is editing; coordinate via `send_message`.
+    5. When done — `update_task(status="review"|"done", note=...)`. Set `client` if the work is for a client.
     <!-- agentboard:end -->
 
     """

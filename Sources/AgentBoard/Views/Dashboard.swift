@@ -2,20 +2,21 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum WidgetKind: String, Codable, CaseIterable, Identifiable {
-    case stats, approvals, agents, feed, tasks, commits, clients, hotFiles, summary, reservations
+    case stats, approvals, agents, feed, tasks, commits, clients, hotFiles, summary, reservations, time
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .stats: return "Показатели"
-        case .approvals: return "Ждут решения"
-        case .agents: return "Агенты"
-        case .feed: return "Лента"
-        case .tasks: return "Задачи в работе"
-        case .commits: return "Коммиты сегодня"
-        case .clients: return "Клиенты сегодня"
-        case .hotFiles: return "Горячие файлы"
-        case .summary: return "Последняя сводка"
-        case .reservations: return "Брони файлов"
+        case .stats: return "Stats"
+        case .approvals: return "Needs your decision"
+        case .agents: return "Agents"
+        case .feed: return "Feed"
+        case .tasks: return "Tasks in progress"
+        case .commits: return "Commits today"
+        case .clients: return "Clients today"
+        case .hotFiles: return "Hot files"
+        case .summary: return "Latest summary"
+        case .reservations: return "File reservations"
+        case .time: return "Time today"
         }
     }
     var icon: String {
@@ -30,6 +31,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         case .hotFiles: return "flame"
         case .summary: return "doc.richtext"
         case .reservations: return "lock.doc"
+        case .time: return "clock"
         }
     }
     var defaultWide: Bool { [.stats, .agents, .feed].contains(self) }
@@ -55,8 +57,8 @@ final class LayoutStore: ObservableObject {
 
     static func defaults(project: Bool) -> [WidgetConfig] {
         let kinds: [WidgetKind] = project
-            ? [.approvals, .stats, .agents, .tasks, .reservations, .hotFiles, .feed, .commits]
-            : [.approvals, .stats, .agents, .tasks, .commits, .feed, .clients, .summary]
+            ? [.approvals, .stats, .agents, .tasks, .time, .reservations, .hotFiles, .feed, .commits]
+            : [.approvals, .stats, .agents, .tasks, .time, .commits, .feed, .clients, .summary]
         // Stable ids: the default layout is rebuilt on every redraw, and fresh random ids made SwiftUI
         // recreate the whole dashboard each time (flicker, typed text and toggles lost).
         return kinds.enumerated().map { i, k in
@@ -137,16 +139,16 @@ struct Dashboard: View {
     var editBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "hand.draw").foregroundStyle(theme.accent)
-            Text("Перетаскивайте виджеты, меняйте ширину и скрывайте лишнее").font(.callout)
+            Text("Drag widgets to reorder, change their width, and hide what you don’t need").font(.callout)
             Spacer()
             Menu {
                 ForEach(WidgetKind.allCases) { k in
                     Button { add(k) } label: { Label(k.title, systemImage: k.icon) }
                 }
-            } label: { Label("Добавить виджет", systemImage: "plus") }
+            } label: { Label("Add widget", systemImage: "plus") }
             .fixedSize()
-            Button("Сбросить") { ThemeStore.animate { layouts.reset(key) } }
-            Button("Готово") { ThemeStore.animate { editing = false } }.buttonStyle(.borderedProminent)
+            Button("Reset") { ThemeStore.animate { layouts.reset(key) } }
+            Button("Done") { ThemeStore.animate { editing = false } }.buttonStyle(.borderedProminent)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: theme.density.radius).fill(theme.accent.opacity(0.1)))
@@ -160,8 +162,8 @@ struct Dashboard: View {
             HStack(spacing: 4) {
                 Button { toggleWide(w) } label: {
                     Image(systemName: w.wide ? "rectangle.split.2x1" : "rectangle")
-                }.help(w.wide ? "Половина ширины" : "На всю ширину")
-                Button { remove(w) } label: { Image(systemName: "xmark") }.help("Скрыть виджет")
+                }.help(w.wide ? "Half width" : "Full width")
+                Button { remove(w) } label: { Image(systemName: "xmark") }.help("Hide widget")
             }
             .buttonStyle(.borderless)
         }
@@ -230,7 +232,7 @@ struct WidgetFrame<Content: View, Controls: View>: View {
         VStack(alignment: .leading, spacing: theme.density.spacing - 2) {
             HStack(spacing: 6) {
                 if editing {
-                    Image(systemName: "line.3.horizontal").foregroundStyle(.secondary).help("Потяните, чтобы переместить")
+                    Image(systemName: "line.3.horizontal").foregroundStyle(.secondary).help("Drag to move")
                 }
                 Image(systemName: kind.icon).foregroundStyle(theme.accent)
                 Text(kind.title).font(.headline)
@@ -297,6 +299,9 @@ struct WidgetContent: View {
         case .hotFiles: hotFiles
         case .summary: summary
         case .reservations: reservationsList
+        case .time:
+            let start = Calendar.current.startOfDay(for: store.now).timeIntervalSince1970
+            TimeBreakdown(from: start, to: start + 86400, projectId: projectId, compact: true)
         }
     }
 
@@ -311,18 +316,18 @@ struct WidgetContent: View {
         let done = store.tasks.filter { (projectId == nil || $0.projectId == projectId) && ($0.doneAt ?? 0) >= dayStart }.count
         let actions = store.events.filter { (projectId == nil || $0.projectId == projectId) && $0.createdAt >= dayStart && $0.kind == "action" }.count
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: theme.density.spacing)], spacing: theme.density.spacing) {
-            StatTile(title: "Агентов работает", value: active.count, icon: "person.2.wave.2", color: .green)
-            StatTile(title: "Ждут вас", value: waiting, icon: "hand.raised", color: .orange)
-            StatTile(title: "Коммитов сегодня", value: commits, icon: "checkmark.seal", color: .purple)
-            StatTile(title: "Задач закрыто", value: done, icon: "checklist.checked", color: .blue)
-            StatTile(title: "Действий сегодня", value: actions, icon: "terminal", color: theme.accent)
+            StatTile(title: "Agents working", value: active.count, icon: "person.2.wave.2", color: .green)
+            StatTile(title: "Waiting on you", value: waiting, icon: "hand.raised", color: .orange)
+            StatTile(title: "Commits today", value: commits, icon: "checkmark.seal", color: .purple)
+            StatTile(title: "Tasks closed", value: done, icon: "checklist.checked", color: .blue)
+            StatTile(title: "Actions today", value: actions, icon: "terminal", color: theme.accent)
         }
     }
 
     @ViewBuilder var approvals: some View {
         let list = store.pending.filter { projectId == nil || $0.projectId == projectId }
         if list.isEmpty {
-            Text("Нет запросов, ожидающих решения").foregroundStyle(.secondary).font(.callout)
+            Text("Nothing waiting for a decision").foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(spacing: 10) { ForEach(list) { ApprovalRow(item: $0) } }
         }
@@ -331,7 +336,7 @@ struct WidgetContent: View {
     @ViewBuilder var tasks: some View {
         let list = store.tasks.filter { (projectId == nil || $0.projectId == projectId) && ($0.status == .in_progress || $0.status == .review) }
         if list.isEmpty {
-            Text("Нет задач в работе").foregroundStyle(.secondary).font(.callout)
+            Text("No tasks in progress").foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(list.prefix(12)) { t in
@@ -355,7 +360,7 @@ struct WidgetContent: View {
             .filter { projectId == nil || $0.id == projectId }
             .flatMap { p in (store.git[p.id]?.todayCommits ?? []).map { (p, $0) } }
         if pairs.isEmpty {
-            Text("Сегодня коммитов не было").foregroundStyle(.secondary).font(.callout)
+            Text("No commits today").foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(pairs.prefix(14), id: \.1.hash) { p, c in
@@ -379,14 +384,14 @@ struct WidgetContent: View {
         let tasksToday = store.tasks.filter { $0.updatedAt >= dayStart && !$0.client.isEmpty && (projectId == nil || $0.projectId == projectId) }
         let names = Set(today.map(\.client) + tasksToday.map(\.client)).sorted()
         if names.isEmpty {
-            Text("Сегодня работы по клиентам не отмечено. Указывайте клиента в задачах.").foregroundStyle(.secondary).font(.callout)
+            Text("No client work logged today. Set a client on tasks to track it.").foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(names, id: \.self) { c in
                     let t = tasksToday.filter { $0.client == c }
                     HStack {
                         Pill(text: c, color: theme.accent, icon: "person.crop.square")
-                        Text("\(t.filter { $0.status == .done }.count) готово · \(t.filter { $0.status != .done }.count) в работе · \(today.filter { $0.client == c }.count) событий")
+                        Text("\(t.filter { $0.status == .done }.count) done · \(t.filter { $0.status != .done }.count) in progress · \(today.filter { $0.client == c }.count) events")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }
@@ -399,7 +404,7 @@ struct WidgetContent: View {
     @ViewBuilder var reservationsList: some View {
         let list = store.reservations.filter { projectId == nil || $0.projectId == projectId }
         if list.isEmpty {
-            Text("Никто ничего не забронировал. Агенты бронируют файлы через reserve_files перед правкой.")
+            Text("No reservations. Agents reserve files with reserve_files before editing them.")
                 .foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -410,9 +415,9 @@ struct WidgetContent: View {
                         if let a = store.agent(r.agentId) { Pill(text: a.name, color: .green, icon: a.toolIcon) }
                         if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                         Spacer()
-                        Text("до \(Fmt.time(r.expiresAt))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text("until \(Fmt.time(r.expiresAt))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }
-                            .buttonStyle(.borderless).help("Снять бронь (агенту придёт сообщение)")
+                            .buttonStyle(.borderless).help("Release reservation (the agent will be notified)")
                     }
                 }.feedRowTransition()
                 .animateRows(list.map(\.id))
@@ -426,7 +431,7 @@ struct WidgetContent: View {
             .map { (path: $0.key, agents: Set($0.value.map(\.agentId)), count: $0.value.reduce(0) { $0 + $1.count }) }
             .sorted { ($0.agents.count, $0.count) > ($1.agents.count, $1.count) }
         if grouped.isEmpty {
-            Text("Сегодня файлы не менялись").foregroundStyle(.secondary).font(.callout)
+            Text("No files changed today").foregroundStyle(.secondary).font(.callout)
         } else {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(grouped.prefix(12), id: \.path) { f in
@@ -452,9 +457,9 @@ struct WidgetContent: View {
             }
         } else {
             HStack {
-                Text("Сводок пока нет").foregroundStyle(.secondary)
+                Text("No summaries yet").foregroundStyle(.secondary)
                 Spacer()
-                Button("Сводка за сегодня") { store.generateSummary(day: Date()) }
+                Button("Today’s summary") { store.generateSummary(day: Date()) }
             }
         }
     }

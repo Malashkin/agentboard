@@ -19,12 +19,12 @@ struct TaskWorkspaceSection: View {
     var body: some View {
         if let t = task, let p = store.project(t.projectId) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Агент и рабочая копия").font(.headline)
+                Text("Agent & worktree").font(.headline)
                 let worker = store.agent(t.assignee)
                 if let worker, worker.isActive(staleMinutes: store.staleMinutes, at: store.now) {
                     HStack {
                         StatusBadge(status: store.status(worker))
-                        Text("Работает \(worker.name) (\(worker.toolLabel))").font(.callout)
+                        Text("\(worker.name) (\(worker.toolLabel)) is working").font(.callout)
                     }
                 } else {
                     HStack(spacing: 10) {
@@ -33,43 +33,43 @@ struct TaskWorkspaceSection: View {
                             Text("Codex").tag("codex")
                         }
                         .labelsHidden().frame(width: 150)
-                        Toggle("В отдельном worktree", isOn: $isolated).toggleStyle(.checkbox)
-                            .help("Своя ветка agent/<номер>-<название> и своя папка: агент не мешает другим и вашей рабочей копии")
+                        Toggle("In a separate worktree", isOn: $isolated).toggleStyle(.checkbox)
+                            .help("Its own agent/<number>-<name> branch and folder, so the agent doesn't interfere with others or your working copy")
                         Spacer()
                         Button {
                             run { try Workspaces.launch(task: t, project: p, tool: tool, isolated: isolated) }
-                        } label: { Label("Запустить агента", systemImage: "play.fill") }
+                        } label: { Label("Start agent", systemImage: "play.fill") }
                             .buttonStyle(.borderedProminent)
                             .disabled(busy)
                     }
-                    Text("Откроется \(AppSettings.terminalApp == "iTerm" ? "iTerm2" : "Terminal") с агентом; задача станет его, как только он подключится.")
+                    Text("Opens \(AppSettings.terminalApp == "iTerm" ? "iTerm2" : "Terminal") with the agent; the task is assigned to it once it connects.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if !t.branch.isEmpty {
                     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
-                        GridRow { Text("Ветка").foregroundStyle(.secondary); Text("\(t.branch) ← \(t.baseBranch)").textSelection(.enabled) }
+                        GridRow { Text("Branch").foregroundStyle(.secondary); Text("\(t.branch) ← \(t.baseBranch)").textSelection(.enabled) }
                         if !t.worktree.isEmpty {
                             GridRow {
-                                Text("Папка").foregroundStyle(.secondary)
+                                Text("Folder").foregroundStyle(.secondary)
                                 Text(t.worktree).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                             }
                         }
                     }
                     .font(.callout)
                     HStack {
-                        Button { reviewing = true } label: { Label("Изменения и ревью", systemImage: "doc.text.magnifyingglass") }
+                        Button { reviewing = true } label: { Label("Changes & review", systemImage: "doc.text.magnifyingglass") }
                             .buttonStyle(.borderedProminent)
                         if !t.worktree.isEmpty {
-                            Button { revealInFinder(t.worktree) } label: { Image(systemName: "folder") }.help("Показать в Finder")
+                            Button { revealInFinder(t.worktree) } label: { Image(systemName: "folder") }.help("Show in Finder")
                             Button { run { try Workspaces.openTerminal("cd \(Workspaces.shq(t.worktree))"); return nil } } label: {
                                 Image(systemName: "terminal")
-                            }.help("Открыть терминал в рабочей копии")
+                            }.help("Open terminal in worktree")
                         }
                         Spacer()
-                        Button("Слить в \(t.baseBranch)") { confirmMerge = true }.disabled(busy)
-                        Button("Создать PR") { run { try Workspaces.createPR(task: t, project: p) } }.disabled(busy)
+                        Button("Merge into \(t.baseBranch)") { confirmMerge = true }.disabled(busy)
+                        Button("Create PR") { run { try Workspaces.createPR(task: t, project: p) } }.disabled(busy)
                         if !t.worktree.isEmpty {
-                            Button("Убрать worktree", role: .destructive) { confirmRemove = true }.disabled(busy)
+                            Button("Remove worktree", role: .destructive) { confirmRemove = true }.disabled(busy)
                         }
                     }
                 }
@@ -78,18 +78,18 @@ struct TaskWorkspaceSection: View {
                 if let error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
             }
             .sheet(isPresented: $reviewing) { ReviewSheet(taskId: taskId) }
-            .confirmationDialog("Слить \(t.branch) в \(t.baseBranch) в \(p.path)?", isPresented: $confirmMerge) {
-                Button("Слить") {
+            .confirmationDialog("Merge \(t.branch) into \(t.baseBranch) in \(p.path)?", isPresented: $confirmMerge) {
+                Button("Merge") {
                     run {
                         let r = try Workspaces.merge(task: t, project: p)
                         store.moveTask(t.id, to: .done)
                         return r
                     }
                 }
-            } message: { Text("Будет сделан merge --no-ff в основной рабочей копии. При конфликте слияние отменится.") }
-            .confirmationDialog("Убрать рабочую копию \(t.worktree)?", isPresented: $confirmRemove) {
-                Button("Убрать", role: .destructive) { run { try Workspaces.removeWorktree(task: t, project: p); return "Рабочая копия убрана, ветка \(t.branch) осталась." } }
-            } message: { Text("Папка удаляется через git worktree remove; ветка с коммитами остаётся. Если там есть незакоммиченные изменения, git откажет.") }
+            } message: { Text("Runs merge --no-ff in the main working copy. If there is a conflict, the merge is aborted.") }
+            .confirmationDialog("Remove worktree \(t.worktree)?", isPresented: $confirmRemove) {
+                Button("Remove", role: .destructive) { run { try Workspaces.removeWorktree(task: t, project: p); return "Worktree removed; branch \(t.branch) was kept." } }
+            } message: { Text("The folder is removed with git worktree remove; the branch and its commits are kept. If there are uncommitted changes, git will refuse.") }
         }
     }
 
@@ -139,7 +139,7 @@ struct ReviewSheet: View {
             } else if files.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "doc.text.magnifyingglass").font(.largeTitle).foregroundStyle(.secondary)
-                    Text("Изменений пока нет").foregroundStyle(.secondary)
+                    Text("No changes yet").foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HSplitView {
@@ -157,16 +157,16 @@ struct ReviewSheet: View {
     var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Ревью · #\(taskId) \(task?.title ?? "")").font(.title3.bold()).lineLimit(1)
+                Text("Review · #\(taskId) \(task?.title ?? "")").font(.title3.bold()).lineLimit(1)
                 if let t = task {
-                    Text("\(t.branch) ← \(t.baseBranch) · коммитов: \(commits.count) · файлов: \(files.count) · "
+                    Text("\(t.branch) ← \(t.baseBranch) · commits: \(commits.count) · files: \(files.count) · "
                          + "+\(files.map(\.added).reduce(0, +)) −\(files.map(\.removed).reduce(0, +))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Button { load() } label: { Image(systemName: "arrow.clockwise") }.help("Обновить")
-            Button("Закрыть") { dismiss() }.keyboardShortcut(.cancelAction)
+            Button { load() } label: { Image(systemName: "arrow.clockwise") }.help("Refresh")
+            Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
         }
         .padding(14)
     }
@@ -174,11 +174,11 @@ struct ReviewSheet: View {
     var fileList: some View {
         List(selection: $selected) {
             if !commits.isEmpty {
-                Section("Коммиты") {
+                Section("Commits") {
                     ForEach(commits, id: \.self) { Text($0).font(.caption.monospaced()).lineLimit(1) }
                 }
             }
-            Section("Файлы") {
+            Section("Files") {
                 ForEach(files) { f in
                     HStack {
                         Text(f.path).font(.caption.monospaced()).lineLimit(1).truncationMode(.head)
@@ -223,7 +223,7 @@ struct ReviewSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if l.kind != .hunk {
                 Button { editing = (f.path, l); draft = "" } label: { Image(systemName: "plus.bubble") }
-                    .buttonStyle(.borderless).help("Комментарий к строке").padding(.trailing, 6)
+                    .buttonStyle(.borderless).help("Comment on line").padding(.trailing, 6)
             }
         }
         .font(.system(size: 12, design: .monospaced))
@@ -241,11 +241,11 @@ struct ReviewSheet: View {
         }
         if let e = editing, e.file == f.path, e.line.id == l.id {
             HStack {
-                TextField("Что не так / что поменять", text: $draft, axis: .vertical)
+                TextField("What's wrong / what to change", text: $draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(addComment)
-                Button("Добавить", action: addComment).disabled(draft.trimmed.isEmpty)
-                Button("Отмена") { editing = nil }
+                Button("Add", action: addComment).disabled(draft.trimmed.isEmpty)
+                Button("Cancel") { editing = nil }
             }
             .padding(8).padding(.leading, 90)
             .background(Color.orange.opacity(0.06))
@@ -263,25 +263,25 @@ struct ReviewSheet: View {
         let t = task
         let agent = store.agent(t?.assignee)
         return VStack(alignment: .leading, spacing: 8) {
-            TextField("Общий комментарий к работе", text: $general, axis: .vertical)
+            TextField("Overall comment on the work", text: $general, axis: .vertical)
                 .lineLimit(2...4).textFieldStyle(.roundedBorder)
             HStack {
                 if let agent {
-                    Text("Агенту \(agent.name)").font(.callout)
+                    Text("To \(agent.name)").font(.callout)
                     Picker("", selection: $mode) { ForEach(DeliveryMode.allCases) { Text($0.label).tag($0) } }
                         .labelsHidden().frame(width: 260)
                 } else {
-                    Text("У задачи нет исполнителя — запустите агента, чтобы отправить ему ревью").font(.caption).foregroundStyle(.secondary)
+                    Text("This task has no assignee. Start an agent to send it the review").font(.caption).foregroundStyle(.secondary)
                 }
                 if let sendResult { Text(sendResult).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
                 Spacer()
-                Button("Принять → Готово") {
+                Button("Accept → Done") {
                     store.moveTask(taskId, to: .done)
                     dismiss()
                 }
                 Button {
                     send(to: agent)
-                } label: { Label("Отправить на доработку (\(comments.count + (general.trimmed.isEmpty ? 0 : 1)))", systemImage: "paperplane.fill") }
+                } label: { Label("Request changes (\(comments.count + (general.trimmed.isEmpty ? 0 : 1)))", systemImage: "paperplane.fill") }
                     .buttonStyle(.borderedProminent)
                     .disabled(agent == nil || (comments.isEmpty && general.trimmed.isEmpty))
             }
@@ -291,13 +291,13 @@ struct ReviewSheet: View {
 
     func send(to agent: Agent?) {
         guard let agent else { return }
-        var lines = ["Ревью задачи #\(taskId) — поправь, пожалуйста:"]
+        var lines = ["Review of task #\(taskId). Please fix:"]
         for c in comments {
             let code = c.code.trimmed.isEmpty ? "" : "  (`\(c.code.trimmed.trunc(120))`)"
             lines.append("- \(c.file)\(c.line.map { ":\($0)" } ?? "")\(code) — \(c.text)")
         }
-        if !general.trimmed.isEmpty { lines.append("Общее: \(general.trimmed)") }
-        lines.append("Когда исправишь — закоммить и снова update_task(task_id: \(taskId), status: \"review\").")
+        if !general.trimmed.isEmpty { lines.append("General: \(general.trimmed)") }
+        lines.append("When done, commit and call update_task(task_id: \(taskId), status: \"review\") again.")
         store.moveTask(taskId, to: .in_progress)
         SessionDelivery.deliver(agentId: agent.id, text: lines.joined(separator: "\n"), mode: mode) { r in
             sendResult = r

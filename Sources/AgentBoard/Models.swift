@@ -43,12 +43,12 @@ enum AgentStatus: String {
 
     var label: String {
         switch self {
-        case .working: return "работает"
-        case .waiting: return "ждёт вас"
-        case .idle: return "свободен"
-        case .ended: return "завершён"
-        case .stale: return "неактивен"
-        case .stuck: return "застрял"
+        case .working: return "working"
+        case .waiting: return "waiting for you"
+        case .idle: return "idle"
+        case .ended: return "finished"
+        case .stale: return "inactive"
+        case .stuck: return "stuck"
         }
     }
     var color: Color {
@@ -133,10 +133,10 @@ enum TaskStatus: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .backlog: return "Бэклог"
-        case .in_progress: return "В работе"
-        case .review: return "На проверке"
-        case .done: return "Готово"
+        case .backlog: return "Backlog"
+        case .in_progress: return "In progress"
+        case .review: return "In review"
+        case .done: return "Done"
         }
     }
     var color: Color {

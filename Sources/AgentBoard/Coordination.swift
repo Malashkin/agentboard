@@ -78,13 +78,13 @@ extension Core {
         }
         if !granted.isEmpty {
             addEvent(project: agent.projectId, agent: agent.id, kind: "reservation",
-                     title: "\(agent.name) забронировал \(granted.joined(separator: ", ").trunc(200)) до \(Fmt.time(until))",
+                     title: "\(agent.name) reserved \(granted.joined(separator: ", ").trunc(200)) until \(Fmt.time(until))",
                      detail: reason)
         }
         for (pat, r) in blocked {
             let holder = self.agent(id: r.agentId)?.name ?? r.agentId
             addEvent(project: agent.projectId, agent: agent.id, kind: "conflict",
-                     title: "\(agent.name) не смог забронировать \(pat): занято \(holder)", ref: pat)
+                     title: "\(agent.name) couldn't reserve \(pat): held by \(holder)", ref: pat)
         }
         return (granted, blocked)
     }
@@ -103,16 +103,16 @@ extension Core {
     func dropReservation(id: Int64) {
         guard let r = db.query("SELECT * FROM reservations WHERE id=?", [id]).first.map(Reservation.init) else { return }
         db.query("UPDATE reservations SET released_at=? WHERE id=?", [now(), id])
-        addEvent(project: r.projectId, agent: nil, kind: "reservation", title: "Вы сняли бронь \(r.pattern)")
+        addEvent(project: r.projectId, agent: nil, kind: "reservation", title: "You released the reservation on \(r.pattern)")
         sendMessage(project: r.projectId, to: r.agentId, from: nil,
-                    text: "Человек снял твою бронь на \(r.pattern). Если файл ещё нужен — забронируй заново и предупреди остальных.")
+                    text: "The human released your reservation on \(r.pattern). If you still need the file, reserve it again and let the others know.")
         changed()
     }
 
     func reservationsText(project: String) -> String {
         activeReservations(project: project).map { r in
             let who = agent(id: r.agentId)?.name ?? r.agentId
-            return "  🔒 \(r.pattern) — \(who) до \(Fmt.time(r.expiresAt))\(r.exclusive ? "" : " (общая)")\(r.reason.isEmpty ? "" : " · \(r.reason)")"
+            return "  🔒 \(r.pattern) — \(who) until \(Fmt.time(r.expiresAt))\(r.exclusive ? "" : " (shared)")\(r.reason.isEmpty ? "" : " · \(r.reason)")"
         }.joined(separator: "\n")
     }
 
@@ -120,7 +120,8 @@ extension Core {
     func handlePreCommit(_ body: String) -> String? {
         var lines = body.split(separator: "\n").map(String.init)
         guard !lines.isEmpty else { return nil }
-        let root = lines.removeFirst()
+        // Same spelling as the intent was recorded with (git's top level; /var vs /private/var and the like).
+        let root = repoRoot(lines.removeFirst())
         guard let project = projectFor(cwd: root), !lines.isEmpty else { return nil }
         // Who commits: the agent that just ran `git commit` in this checkout. A human commit is never blocked.
         guard let intent = commitIntent[root], now() - intent.at < AppSettings.approvalTimeout + 300 else { return nil }
@@ -128,15 +129,15 @@ extension Core {
         guard !conflicts.isEmpty else { return nil }
         let me = agent(id: intent.agentId)
         let list = conflicts.map { path, r in
-            "  \(path) — забронирован \(agent(id: r.agentId)?.name ?? r.agentId) до \(Fmt.time(r.expiresAt))\(r.reason.isEmpty ? "" : " («\(r.reason)»)")"
+            "  \(path) — reserved by \(agent(id: r.agentId)?.name ?? r.agentId) until \(Fmt.time(r.expiresAt))\(r.reason.isEmpty ? "" : " (\"\(r.reason)\")")"
         }.joined(separator: "\n")
         addEvent(project: project.id, agent: intent.agentId, kind: "conflict",
-                 title: "Коммит \(me?.name ?? "агента") остановлен: файлы забронированы другими", detail: list)
+                 title: "Commit by \(me?.name ?? "an agent") blocked: files reserved by others", detail: list)
         changed()
         return """
-        AgentBoard: коммит остановлен — эти файлы забронированы другими агентами:
+        AgentBoard: commit blocked — these files are reserved by other agents:
         \(list)
-        Договорись с владельцем брони (send_message) или убери эти файлы из коммита (git restore --staged <файл>).
+        Coordinate with the reservation holder (send_message) or drop these files from the commit (git restore --staged <file>).
         """
     }
 }
@@ -155,13 +156,13 @@ extension Core {
         let already = !(self.agent(id: agent.id)?.stuck ?? "").isEmpty
         setAgent(agent.id, ["stuck": reason])
         if !already {
-            addEvent(project: project.id, agent: agent.id, kind: "stuck", title: "\(agent.name), похоже, застрял: \(reason)")
-            notify?("\(agent.name) застрял · \(project.name)", reason)
+            addEvent(project: project.id, agent: agent.id, kind: "stuck", title: "\(agent.name) seems stuck: \(reason)")
+            notify?("\(agent.name) is stuck · \(project.name)", reason)
         }
         guard AppSettings.stuckNudge, stuckState[agent.id]?.nudged != true else { return nil }
         stuckState[agent.id, default: StuckTracker()].nudged = true
-        return "[AgentBoard] Похоже, ты ходишь по кругу: \(reason). Остановись: разберись в причине, смени подход "
-            + "или спроси человека, вместо того чтобы повторять то же самое."
+        return "[AgentBoard] Looks like you're going in circles: \(reason). Stop: figure out the cause, change your approach "
+            + "or ask the human instead of repeating the same thing."
     }
 
     /// A failed tool call. The same call failing 3 times in 20 minutes, or 8 failures in one turn, means stuck.
@@ -172,8 +173,8 @@ extension Core {
         st.failures.append((key, now()))
         stuckState[agent.id] = st
         let same = st.failures.filter { $0.key == key }.count
-        if same >= 3 { return flagStuck(agent, project: project, reason: "\(same) раза подряд падает `\(key.trunc(120))`") }
-        if st.failures.count >= 8 { return flagStuck(agent, project: project, reason: "\(st.failures.count) ошибок за последние 20 минут") }
+        if same >= 3 { return flagStuck(agent, project: project, reason: "`\(key.trunc(120))` failed \(same) times in a row") }
+        if st.failures.count >= 8 { return flagStuck(agent, project: project, reason: "\(st.failures.count) errors in the last 20 minutes") }
         return nil
     }
 
@@ -186,7 +187,7 @@ extension Core {
         let n = st.recent.filter { $0 == key }.count
         guard n >= 5 else { return nil }
         let shown = key.split(separator: "|", maxSplits: 1).last.map(String.init) ?? key
-        return flagStuck(agent, project: project, reason: "повторяет одно и то же (\(n) из последних 20 действий): \(shown.oneLine.trunc(120))")
+        return flagStuck(agent, project: project, reason: "repeating the same thing (\(n) of the last 20 actions): \(shown.oneLine.trunc(120))")
     }
 
     func noteSuccess(agent: Agent, tool: String, input: JSON) {
@@ -201,7 +202,7 @@ extension Core {
 
 extension Core {
     func startPermissionFlow(agent: Agent, project: Project, tool: String, input: JSON, suggestions: [Any],
-                             sub: String, reply: @escaping (Data?) -> Void) {
+                             sub: String, plain: Bool = false, reply: @escaping (Data?) -> Void) {
         let id = UUID().uuidString
         var kind = "permission"
         var summary = "", detail = ""
@@ -214,16 +215,16 @@ extension Core {
                             options: ((q["options"] as? [JSON]) ?? []).map { AskOption(label: $0.s("label"), description: $0.s("description")) },
                             multiSelect: q["multiSelect"] as? Bool ?? false)
             }
-            summary = questions.first?.question ?? "Вопрос"
+            summary = questions.first?.question ?? "Question"
         case "ExitPlanMode":
             kind = "plan"
             detail = input.s("plan")
-            summary = "План готов — нужно одобрение"
+            summary = "Plan ready — needs approval"
         case "Bash":
             summary = "$ " + input.s("command")
             detail = input.s("description")
         case "Edit", "MultiEdit":
-            summary = "правит " + relativePath(input.s("file_path"), agent: agent, project: project)
+            summary = "editing " + relativePath(input.s("file_path"), agent: agent, project: project)
             if tool == "Edit" {
                 detail = "− " + input.s("old_string").trunc(1500).replacingOccurrences(of: "\n", with: "\n− ")
                     + "\n+ " + input.s("new_string").trunc(1500).replacingOccurrences(of: "\n", with: "\n+ ")
@@ -231,7 +232,7 @@ extension Core {
                 detail = jsonString(input).trunc(3000)
             }
         case "Write":
-            summary = "пишет " + relativePath(input.s("file_path"), agent: agent, project: project)
+            summary = "writing " + relativePath(input.s("file_path"), agent: agent, project: project)
             detail = input.s("content").trunc(3000)
         default:
             let d = Self.describeTool(tool, input, agent: agent, project: project, core: self)
@@ -246,14 +247,13 @@ extension Core {
                                questions: questions, canAlwaysAllow: !suggestions.isEmpty)
         let work = DispatchWorkItem { [weak self] in self?.resolveCommit(id: id, allow: nil, comment: "") }
         pending[id] = PendingEntry(commit: pc, reply: reply, timer: work, toolInput: input,
-                                   inputKey: tool + "|" + jsonString(input), suggestions: suggestions)
-        setAgent(agent.id, ["status": "waiting", "last_action": kind == "question" ? "задаёт вопрос" : kind == "plan" ? "ждёт одобрения плана" : "ждёт разрешения: \(summary.oneLine.trunc(150))"])
+                                   inputKey: tool + "|" + jsonString(input), suggestions: suggestions, plain: plain)
+        setAgent(agent.id, ["status": "waiting", "last_action": kind == "question" ? "asking a question" : kind == "plan" ? "waiting for plan approval" : "waiting for permission: \(summary.oneLine.trunc(150))"])
         addEvent(project: project.id, agent: agent.id, kind: "permission",
-                 title: "\(agent.name) " + (kind == "question" ? "спрашивает: \(summary.trunc(180))" : kind == "plan" ? "предлагает план" : "просит разрешение: \(summary.oneLine.trunc(180))"),
+                 title: "\(agent.name) " + (kind == "question" ? "asks: \(summary.trunc(180))" : kind == "plan" ? "proposes a plan" : "asks for permission: \(summary.oneLine.trunc(180))"),
                  detail: detail.trunc(4000), sub: sub)
         q.asyncAfter(deadline: .now() + timeout, execute: work)
-        notify?(kind == "question" ? "\(agent.name) спрашивает · \(project.name)" : kind == "plan" ? "\(agent.name): план на одобрение" : "\(agent.name) просит разрешение · \(project.name)",
-                summary.oneLine.trunc(200))
+        notifyRequest?(pc)
         changed()
     }
 
@@ -263,14 +263,16 @@ extension Core {
         switch allow {
         case .some(true):
             var d: JSON = ["behavior": "allow"]
-            if c.kind == "question" {
+            if e.plain {
+                // Codex: nothing but the decision itself.
+            } else if c.kind == "question" {
                 var inp = e.toolInput
                 inp["answers"] = answers
                 d["updatedInput"] = inp
             } else if c.kind == "plan" {
                 d["updatedInput"] = e.toolInput
             }
-            if always, !e.suggestions.isEmpty {
+            if always, !e.suggestions.isEmpty, !e.plain {
                 // Remember for this session only, never in settings files.
                 d["updatedPermissions"] = e.suggestions.compactMap { s -> JSON? in
                     guard var j = s as? JSON else { return nil }
@@ -279,18 +281,18 @@ extension Core {
                 }
             }
             e.reply(out(d))
-            let what = c.kind == "question" ? "ответили: " + answers.values.joined(separator: "; ").trunc(200)
-                : c.kind == "plan" ? "план одобрен" : "разрешено" + (always ? " (до конца сессии)" : "")
+            let what = c.kind == "question" ? "answered: " + answers.values.joined(separator: "; ").trunc(200)
+                : c.kind == "plan" ? "plan approved" : "allowed" + (always ? " (for the rest of the session)" : "")
             addEvent(project: c.projectId, agent: c.agentId, kind: "permission", title: "\(c.agentName): \(what)", detail: comment)
             setAgent(c.agentId, ["status": "working", "last_action": what.trunc(200)])
             if !comment.isEmpty { sendMessage(project: c.projectId, to: c.agentId, from: nil, text: comment) }
         case .some(false):
             let msg = c.kind == "plan"
-                ? "Человек не одобрил план в AgentBoard." + (comment.isEmpty ? "" : " Что изменить: \(comment)")
-                : "Человек отклонил это в AgentBoard." + (comment.isEmpty ? "" : " Комментарий: \(comment)")
+                ? "The human did not approve the plan in AgentBoard." + (comment.isEmpty ? "" : " What to change: \(comment)")
+                : "The human denied this in AgentBoard." + (comment.isEmpty ? "" : " Comment: \(comment)")
             e.reply(out(["behavior": "deny", "message": msg]))
             addEvent(project: c.projectId, agent: c.agentId, kind: "permission",
-                     title: "\(c.agentName): " + (c.kind == "plan" ? "план отправлен на доработку" : "отклонено"), detail: comment)
+                     title: "\(c.agentName): " + (c.kind == "plan" ? "plan sent back for changes" : "denied"), detail: comment)
             setAgent(c.agentId, ["status": "working"])
         case .none:
             // Timed out: the terminal prompt (shown all along) stays the place to answer.
@@ -306,6 +308,7 @@ extension Core {
             pending.removeValue(forKey: id)
             e.timer.cancel()
             e.reply(nil)
+            requestResolved?(id)
         }
     }
 }

@@ -108,7 +108,7 @@ enum HistoryImporter {
             let name = db.query("SELECT name FROM agents WHERE id=?", [agentId]).first?.s("name") ?? ""
             db.exec("BEGIN")
             for e in entries {
-                let title = e.kind == "prompt" ? "\(name): \(e.title)" : e.kind == "turn_done" ? "\(name) завершил ход" : e.title
+                let title = e.kind == "prompt" ? "\(name): \(e.title)" : e.kind == "turn_done" ? "\(name) finished a turn" : e.title
                 db.query("INSERT INTO events(project_id, agent_id, kind, title, detail, client, ref, created_at) VALUES(?,?,?,?,?,?,?,?)",
                          [p.id, agentId, e.kind, title.trunc(300), e.detail.trunc(8000), p.client, e.ref, e.at])
                 if e.kind == "action", !e.ref.isEmpty {
@@ -180,7 +180,7 @@ enum HistoryImporter {
 
     private static func isNoise(_ t: String) -> Bool {
         let s = t.trimmed
-        return s.isEmpty || s.hasPrefix("<command-") || s.hasPrefix("<local-command") || s.hasPrefix("Caveat:")
+        return s.isEmpty || Core.isSystemPrompt(s) || s.hasPrefix("<command-") || s.hasPrefix("<local-command") || s.hasPrefix("Caveat:")
             || s.hasPrefix("<system-reminder>") || s.hasPrefix("[Request interrupted") || s.hasPrefix("This session is being continued")
     }
 
@@ -190,19 +190,19 @@ enum HistoryImporter {
         case "Bash":
             let cmd = input.s("command")
             return ("$ " + cmd.oneLine.trunc(240), ((input.str("description") ?? "") + "\n" + cmd.trunc(2000)).trimmed, "")
-        case "Edit", "MultiEdit": return ("правит \(r(input.s("file_path")))", "", r(input.s("file_path")))
-        case "Write": return ("пишет \(r(input.s("file_path")))", "", r(input.s("file_path")))
-        case "NotebookEdit": return ("правит \(r(input.s("notebook_path")))", "", r(input.s("notebook_path")))
-        case "Read": return ("читает \(r(input.s("file_path")))", "", "")
-        case "Grep": return ("ищет «\(input.s("pattern").trunc(80))»\(input.str("path").map { " в \(r($0))" } ?? "")", "", "")
-        case "Glob": return ("ищет файлы \(input.s("pattern"))", "", "")
-        case "WebFetch": return ("открывает \(input.s("url").trunc(160))", input.s("prompt").trunc(500), "")
-        case "WebSearch": return ("ищет в сети: \(input.s("query").trunc(160))", "", "")
-        case "Task", "Agent": return ("запускает субагента: \(input.s("description").trunc(160))", input.s("prompt").trunc(2000), "")
+        case "Edit", "MultiEdit": return ("editing \(r(input.s("file_path")))", "", r(input.s("file_path")))
+        case "Write": return ("writing \(r(input.s("file_path")))", "", r(input.s("file_path")))
+        case "NotebookEdit": return ("editing \(r(input.s("notebook_path")))", "", r(input.s("notebook_path")))
+        case "Read": return ("reading \(r(input.s("file_path")))", "", "")
+        case "Grep": return ("searching \"\(input.s("pattern").trunc(80))\"\(input.str("path").map { " in \(r($0))" } ?? "")", "", "")
+        case "Glob": return ("finding files \(input.s("pattern"))", "", "")
+        case "WebFetch": return ("opening \(input.s("url").trunc(160))", input.s("prompt").trunc(500), "")
+        case "WebSearch": return ("searching the web: \(input.s("query").trunc(160))", "", "")
+        case "Task", "Agent": return ("starting subagent: \(input.s("description").trunc(160))", input.s("prompt").trunc(2000), "")
         case "TodoWrite":
             let todos = (input["todos"] as? [JSON]) ?? []
             let cur = todos.first { $0.s("status") == "in_progress" }?.s("content") ?? todos.first?.s("content") ?? ""
-            return ("план: \(cur.trunc(180))", todos.map { "[\($0.s("status"))] \($0.s("content"))" }.joined(separator: "\n"), "")
+            return ("plan: \(cur.trunc(180))", todos.map { "[\($0.s("status"))] \($0.s("content"))" }.joined(separator: "\n"), "")
         default:
             let args = jsonString(input)
             return ("\(tool.replacingOccurrences(of: "mcp__", with: "")) \(args.oneLine.trunc(140))", args.trunc(1500), "")
@@ -340,9 +340,9 @@ enum HistoryImporter {
                     SELECT agent_id FROM events WHERE project_id=? AND kind='action' AND title LIKE '$ %git%commit%'
                       AND created_at BETWEEN ? AND ? ORDER BY created_at DESC LIMIT 1
                     """, [p.id, at - 600, at + 5]).first?.str("agent_id")
-                let refs = c.count > 5 && !c[5].isEmpty ? "\nВетки: \(c[5])" : ""
+                let refs = c.count > 5 && !c[5].isEmpty ? "\nBranches: \(c[5])" : ""
                 db.query("INSERT INTO events(project_id, agent_id, kind, title, detail, client, ref, created_at) VALUES(?,?,?,?,?,?,?,?)",
-                         [p.id, nn(agent), "commit", "\(short) \(subject)".trunc(300), "Автор: \(author)\(refs)", p.client, hash, at])
+                         [p.id, nn(agent), "commit", "\(short) \(subject)".trunc(300), "Author: \(author)\(refs)", p.client, hash, at])
                 r.commits += 1
             }
             db.exec("COMMIT")

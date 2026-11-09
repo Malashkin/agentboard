@@ -167,7 +167,7 @@ enum Shell {
 enum Fmt {
     static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
-        f.locale = Locale(identifier: "ru_RU")
+        f.locale = Locale(identifier: "en_US")
         f.unitsStyle = .short
         return f
     }()
@@ -183,8 +183,8 @@ enum Fmt {
     }()
     static let dayHuman: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
-        f.dateFormat = "d MMMM yyyy, EEEE"
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "EEEE, MMMM d, yyyy"
         return f
     }()
     static let gitDate: DateFormatter = {
@@ -196,7 +196,7 @@ enum Fmt {
     static func rel(_ ts: Double, now: Date = Date()) -> String {
         if ts <= 0 { return "—" }
         let d = Date(timeIntervalSince1970: ts)
-        if now.timeIntervalSince(d) < 10 { return "только что" }
+        if now.timeIntervalSince(d) < 10 { return "just now" }
         return relative.localizedString(for: d, relativeTo: now)
     }
     static func time(_ ts: Double) -> String { clock.string(from: Date(timeIntervalSince1970: ts)) }

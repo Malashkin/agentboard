@@ -6,6 +6,8 @@ struct AgentCard: View {
     var showProject = false
     var onOpen: () -> Void = {}
     var onMessage: () -> Void = {}
+    @State private var reply = ""
+    @State private var replyResult: String?
 
     var body: some View {
         let st = store.status(agent)
@@ -23,7 +25,7 @@ struct AgentCard: View {
                     if showProject, let p = store.project(agent.projectId) { Pill(text: p.name, color: .accentColor, icon: "folder") }
                     if !agent.branch.isEmpty { Pill(text: agent.branch, color: .purple, icon: "arrow.triangle.branch") }
                     let unread = store.undelivered(to: agent.id)
-                    if unread > 0 { Pill(text: "\(unread) не доставлено", color: .teal, icon: "envelope") }
+                    if unread > 0 { Pill(text: "\(unread) undelivered", color: .teal, icon: "envelope") }
                 }
                 if let t = store.currentTask(of: agent.id) {
                     Label("#\(t.id) \(t.title)" + (t.client.isEmpty ? "" : " · \(t.client)"), systemImage: "checklist")
@@ -35,11 +37,11 @@ struct AgentCard: View {
                 // What it's doing, in plain words (fixed height so the card never jumps).
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "text.quote").foregroundStyle(Color.accentColor)
-                    Text(agent.narrative.isEmpty ? "Опишу, что он делает, после первых действий…" : agent.narrative)
+                    Text(agent.narrative.isEmpty ? "I'll describe what it's doing after its first actions…" : agent.narrative)
                         .font(.callout.weight(.medium))
                         .foregroundStyle(agent.narrative.isEmpty ? .secondary : .primary)
                         .lineLimit(3, reservesSpace: true)
-                        .help(agent.narrative.isEmpty ? "" : "Обновлено \(Fmt.rel(agent.narrativeAt, now: store.now))")
+                        .help(agent.narrative.isEmpty ? "" : "Updated \(Fmt.rel(agent.narrativeAt, now: store.now))")
                 }
                 // Fixed height, so a new prompt doesn't resize the card and reflow the grid.
                 Text(agent.lastPrompt.isEmpty ? " " : "«\(agent.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression).oneLine.trimmed)»").font(.callout).foregroundStyle(.secondary)
@@ -49,7 +51,7 @@ struct AgentCard: View {
                         Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.red)
                         Text(agent.stuck).font(.caption).foregroundStyle(.red).lineLimit(2)
                         Spacer(minLength: 0)
-                        Button("Написать") { onMessage() }.font(.caption).buttonStyle(.borderless)
+                        Button("Message") { onMessage() }.font(.caption).buttonStyle(.borderless)
                     }
                     .padding(6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.08)))
@@ -61,7 +63,7 @@ struct AgentCard: View {
                             Pill(text: s.type, color: .green, icon: "arrow.turn.down.right")
                         }
                         let done = subs.filter { !$0.isRunning }.count
-                        if done > 0 { Pill(text: "\(done) субагент(ов) готово", color: .secondary) }
+                        if done > 0 { Pill(text: "\(done) subagent(s) done", color: .secondary) }
                     }
                 }
                 let held = store.reservations(of: agent.id)
@@ -73,6 +75,18 @@ struct AgentCard: View {
                 if !files.isEmpty {
                     Text(files.joined(separator: " · ")).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
+                if st == .waiting || st == .idle || st == .stuck {
+                    // Answer the agent right here: typed into its terminal when it waits, queued otherwise.
+                    HStack(spacing: 6) {
+                        TextField(st == .waiting ? "Reply to \(agent.name)…" : "Next instruction for \(agent.name)…", text: $reply)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(sendReply)
+                        Button(action: sendReply) { Image(systemName: "paperplane.fill") }
+                            .disabled(reply.trimmed.isEmpty)
+                            .help("Delivered like a message typed in its terminal")
+                    }
+                    if let replyResult { Text(replyResult).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
+                }
                 Divider()
                 HStack(spacing: 6) {
                     Image(systemName: "bolt").foregroundStyle(.secondary)
@@ -80,13 +94,20 @@ struct AgentCard: View {
                     Spacer()
                     Text(Fmt.rel(agent.lastSeen, now: store.now)).foregroundStyle(.secondary)
                     Button { onMessage() } label: { Image(systemName: "text.bubble") }
-                        .buttonStyle(.borderless).help("Комментарий в сессию агента")
+                        .buttonStyle(.borderless).help("Message the agent's session")
                 }
                 .font(.caption)
             }
         }
         .contentShape(Rectangle())
         .onTapGesture { onOpen() }
+    }
+
+    func sendReply() {
+        let text = reply.trimmed
+        guard !text.isEmpty else { return }
+        reply = ""
+        SessionDelivery.deliver(agentId: agent.id, text: text, mode: .auto) { r in replyResult = r }
     }
 }
 
@@ -108,19 +129,19 @@ struct AgentsGrid: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Toggle("Показывать завершённые и неактивные", isOn: $showEnded).toggleStyle(.checkbox)
+                Toggle("Show finished and inactive", isOn: $showEnded).toggleStyle(.checkbox)
                 Spacer()
                 if let projectId {
                     Button { messageTo = MessageTarget(projectId: projectId, agent: nil) } label: {
-                        Label("Написать всем агентам", systemImage: "megaphone")
+                        Label("Message all agents", systemImage: "megaphone")
                     }
                 }
             }
             if list.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "person.2.slash").font(.largeTitle).foregroundStyle(.secondary)
-                    Text("Активных агентов нет").font(.headline)
-                    Text("Запустите Claude Code в папке проекта — агент появится здесь автоматически.")
+                    Text("No active agents").font(.headline)
+                    Text("Run Claude Code in the project folder and the agent will appear here automatically.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity).padding(40)
@@ -162,22 +183,22 @@ struct MessageSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             if let a {
                 HStack {
-                    Text("Комментарий в сессию \(a.name)").font(.title3.bold())
+                    Text("Message \(a.name)'s session").font(.title3.bold())
                     Pill(text: a.toolLabel)
                     StatusBadge(status: store.status(a))
                 }
                 if !a.lastAction.isEmpty {
-                    Text("Сейчас: \(a.lastAction)").font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                    Text("Now: \(a.lastAction)").font(.callout).foregroundStyle(.secondary).lineLimit(2)
                 }
             } else {
-                Text("Сообщение всем активным агентам проекта").font(.title3.bold())
-                Text("Каждый агент получит его в контекст на ближайшем шаге или при следующем запросе.")
+                Text("Message all active agents in the project").font(.title3.bold())
+                Text("Each agent receives it in its context on its next step or next request.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             TextEditor(text: $text).font(.body).frame(minHeight: 130)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
             if a != nil {
-                Picker("Доставка", selection: $mode) {
+                Picker("Delivery", selection: $mode) {
                     ForEach(DeliveryMode.allCases) { Text($0.label).tag($0) }
                 }
                 Text(mode.help).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -189,9 +210,9 @@ struct MessageSheet: View {
             HStack {
                 if sending { ProgressView().controlSize(.small) }
                 Spacer()
-                Button(result == nil ? "Отмена" : "Закрыть") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(result == nil ? "Cancel" : "Close") { dismiss() }.keyboardShortcut(.cancelAction)
                 if result == nil {
-                    Button("Отправить") { send(a) }
+                    Button("Send") { send(a) }
                         .keyboardShortcut(.return, modifiers: .command)
                         .buttonStyle(.borderedProminent)
                         .disabled(text.trimmed.isEmpty || sending)
@@ -229,24 +250,32 @@ struct AgentDetailSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: a.toolIcon).font(.title2)
-                    TextField("Имя", text: $name).font(.title2.bold()).textFieldStyle(.plain)
+                    TextField("Name", text: $name).font(.title2.bold()).textFieldStyle(.plain)
                         .onSubmit { store.renameAgent(a.id, name) }
                     StatusBadge(status: store.status(a))
                     Spacer()
-                    Button("Готово") { if name != a.name { store.renameAgent(a.id, name) }; dismiss() }
+                    Button("Done") { if name != a.name { store.renameAgent(a.id, name) }; dismiss() }
                         .keyboardShortcut(.defaultAction)
                 }
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                     GridRow { Text("ID").foregroundStyle(.secondary); Text(a.id).textSelection(.enabled) }
-                    GridRow { Text("Инструмент").foregroundStyle(.secondary); Text(a.toolLabel) }
-                    GridRow { Text("Папка").foregroundStyle(.secondary); Text(a.cwd).textSelection(.enabled).lineLimit(1).truncationMode(.middle) }
-                    GridRow { Text("Ветка").foregroundStyle(.secondary); Text(a.branch.isEmpty ? "—" : a.branch) }
-                    GridRow { Text("Начал").foregroundStyle(.secondary); Text(Fmt.rel(a.startedAt, now: store.now)) }
-                    GridRow { Text("Фокус").foregroundStyle(.secondary); Text(a.focus.isEmpty ? "—" : a.focus) }
+                    GridRow { Text("Tool").foregroundStyle(.secondary); Text(a.toolLabel) }
+                    GridRow { Text("Folder").foregroundStyle(.secondary); Text(a.cwd).textSelection(.enabled).lineLimit(1).truncationMode(.middle) }
+                    GridRow { Text("Branch").foregroundStyle(.secondary); Text(a.branch.isEmpty ? "—" : a.branch) }
+                    GridRow {
+                        Text("Project").foregroundStyle(.secondary)
+                        Picker("", selection: Binding(get: { a.projectId }, set: { store.pinAgent(a.id, to: $0) })) {
+                            ForEach(store.projects) { Text($0.name).tag($0.id) }
+                        }
+                        .labelsHidden().frame(width: 220)
+                        .help("Pin this session to a project (sessions started in ~ or ~/Desktop are guessed from the files they touch)")
+                    }
+                    GridRow { Text("Started").foregroundStyle(.secondary); Text(Fmt.rel(a.startedAt, now: store.now)) }
+                    GridRow { Text("Focus").foregroundStyle(.secondary); Text(a.focus.isEmpty ? "—" : a.focus) }
                 }
                 .font(.callout)
                 if !a.narrative.isEmpty {
-                    GroupBox("Сейчас") {
+                    GroupBox("Now") {
                         HStack(alignment: .top) {
                             Text(a.narrative).font(.callout).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
                             Text(Fmt.rel(a.narrativeAt, now: store.now)).font(.caption).foregroundStyle(.secondary)
@@ -254,13 +283,13 @@ struct AgentDetailSheet: View {
                     }
                 }
                 if !a.lastPrompt.isEmpty {
-                    GroupBox("Последний запрос") {
+                    GroupBox("Last request") {
                         ScrollView { Text(a.lastPrompt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
                             .frame(maxHeight: 90)
                     }
                 }
                 HStack(alignment: .top, spacing: 12) {
-                    GroupBox("Файлы") {
+                    GroupBox("Files") {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 3) {
                                 ForEach(store.files(of: a.id)) { f in
@@ -274,7 +303,7 @@ struct AgentDetailSheet: View {
                         }
                     }
                     .frame(width: 260)
-                    GroupBox("Хронология") {
+                    GroupBox("Timeline") {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(store.events.filter { $0.agentId == a.id }.prefix(150)) { e in
@@ -293,7 +322,7 @@ struct AgentDetailSheet: View {
                 .frame(height: 280)
                 let subs = store.subagents(of: a.id)
                 if !subs.isEmpty {
-                    GroupBox("Субагенты") {
+                    GroupBox("Subagents") {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(subs.reversed()) { s in
@@ -318,7 +347,7 @@ struct AgentDetailSheet: View {
                 }
                 let held = store.reservations(of: a.id)
                 if !held.isEmpty {
-                    GroupBox("Брони файлов") {
+                    GroupBox("File reservations") {
                         VStack(alignment: .leading, spacing: 3) {
                             ForEach(held) { r in
                                 HStack {
@@ -326,7 +355,7 @@ struct AgentDetailSheet: View {
                                     Text(r.pattern).font(.caption.monospaced())
                                     if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary) }
                                     Spacer()
-                                    Text("до \(Fmt.time(r.expiresAt))").font(.caption)
+                                    Text("until \(Fmt.time(r.expiresAt))").font(.caption)
                                     Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.borderless)
                                 }
                             }
@@ -335,7 +364,7 @@ struct AgentDetailSheet: View {
                 }
                 let inbox = store.inbox(of: a.id)
                 if !inbox.isEmpty {
-                    GroupBox("Сообщения агенту") {
+                    GroupBox("Messages to the agent") {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(inbox.prefix(6)) { m in
                                 HStack(alignment: .top) {
@@ -348,13 +377,13 @@ struct AgentDetailSheet: View {
                     }
                 }
                 HStack {
-                    Button { messaging = true } label: { Label("Комментарий в сессию", systemImage: "text.bubble") }
+                    Button { messaging = true } label: { Label("Message the session", systemImage: "text.bubble") }
                     if !a.transcriptPath.isEmpty {
-                        Button { revealInFinder(a.transcriptPath) } label: { Label("Транскрипт", systemImage: "doc.text") }
+                        Button { revealInFinder(a.transcriptPath) } label: { Label("Transcript", systemImage: "doc.text") }
                     }
                     Spacer()
                     if a.status != "ended" {
-                        Button("Пометить завершённым") { store.endAgent(a.id) }
+                        Button("Mark as finished") { store.endAgent(a.id) }
                     }
                 }
             }
@@ -363,7 +392,7 @@ struct AgentDetailSheet: View {
             .onAppear { name = a.name }
             .sheet(isPresented: $messaging) { MessageSheet(target: MessageTarget(projectId: a.projectId, agent: a.id)) }
         } else {
-            Text("Агент не найден").padding(40)
+            Text("Agent not found").padding(40)
         }
     }
 }

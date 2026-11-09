@@ -16,14 +16,14 @@ struct BoardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Picker("Клиент", selection: $clientFilter) {
-                    Text("Все клиенты").tag("")
+                Picker("Client", selection: $clientFilter) {
+                    Text("All clients").tag("")
                     ForEach(store.clients(in: projectId), id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 260)
                 Spacer()
-                Text("Перетаскивайте карточки между колонками").font(.caption).foregroundStyle(.secondary)
-                Button { creating = true } label: { Label("Новая задача", systemImage: "plus") }
+                Text("Drag cards between columns").font(.caption).foregroundStyle(.secondary)
+                Button { creating = true } label: { Label("New task", systemImage: "plus") }
                     .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal, 20).padding(.top, 14)
@@ -58,9 +58,9 @@ struct BoardView: View {
                                     Button("→ \(s.label)") { store.moveTask(t.id, to: s) }
                                 }
                                 Divider()
-                                Button("Запустить агента / рабочая копия…") { editing = t }
+                                Button("Start agent / worktree…") { editing = t }
                                 Divider()
-                                Button("Удалить", role: .destructive) { store.deleteTask(t.id) }
+                                Button("Delete", role: .destructive) { store.deleteTask(t.id) }
                             }
                     }.feedRowTransition()
                     .animateRows(list.map(\.id))
@@ -94,6 +94,7 @@ struct TaskCard: View {
                 HStack(spacing: 6) {
                     if !task.client.isEmpty { Pill(text: task.client, color: .accentColor, icon: "person.crop.square") }
                     if !task.branch.isEmpty { Pill(text: task.branch, color: .purple, icon: "arrow.triangle.branch") }
+                    if task.createdBy == "auto" { Pill(text: "auto", color: .secondary, icon: "wand.and.stars").help("Created automatically from the agent's request") }
                     if let a = store.agent(task.assignee) {
                         let st = store.status(a)
                         Pill(text: a.name, color: st == .working || st == .waiting ? .green : .secondary, icon: a.toolIcon)
@@ -119,10 +120,10 @@ struct TaskEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(original == nil ? "Новая задача" : "Задача #\(original!.id)").font(.title3.bold())
+            Text(original == nil ? "New task" : "Task #\(original!.id)").font(.title3.bold())
             Form {
-                TextField("Название", text: $title)
-                TextField("Клиент", text: $client)
+                TextField("Title", text: $title)
+                TextField("Client", text: $client)
                 if !store.clients(in: nil).isEmpty {
                     HStack {
                         ForEach(store.clients(in: nil).prefix(6), id: \.self) { c in
@@ -130,17 +131,17 @@ struct TaskEditor: View {
                         }
                     }
                 }
-                Picker("Статус", selection: $status) {
+                Picker("Status", selection: $status) {
                     ForEach(TaskStatus.allCases) { Text($0.label).tag($0) }
                 }
-                Picker("Исполнитель", selection: $assignee) {
+                Picker("Assignee", selection: $assignee) {
                     Text("—").tag("")
                     ForEach(store.agents(in: projectId).filter { $0.status != "ended" || $0.id == assignee }) { a in
                         Text("\(a.name) (\(a.toolLabel))").tag(a.id)
                     }
                 }
                 VStack(alignment: .leading) {
-                    Text("Описание").font(.caption).foregroundStyle(.secondary)
+                    Text("Description").font(.caption).foregroundStyle(.secondary)
                     TextEditor(text: $details).frame(minHeight: 120)
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
                 }
@@ -152,11 +153,11 @@ struct TaskEditor: View {
             }
             HStack {
                 if let original {
-                    Button("Удалить", role: .destructive) { store.deleteTask(original.id); dismiss() }
+                    Button("Delete", role: .destructive) { store.deleteTask(original.id); dismiss() }
                 }
                 Spacer()
-                Button("Отмена") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Сохранить") { save() }
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save") { save() }
                     .keyboardShortcut(.return, modifiers: .command)
                     .buttonStyle(.borderedProminent)
                     .disabled(title.trimmed.isEmpty)

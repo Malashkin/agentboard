@@ -27,7 +27,7 @@ enum Workspaces {
     static func ensureWorktree(task t: TaskItem, project p: Project) throws -> (String, String, String) {
         if !t.worktree.isEmpty, FileManager.default.fileExists(atPath: t.worktree) { return (t.worktree, t.branch, t.baseBranch) }
         let base = Shell.git(["rev-parse", "--abbrev-ref", "HEAD"], cwd: p.path)
-        guard base.ok else { throw Failure.message("\(p.path) — не git-репозиторий") }
+        guard base.ok else { throw Failure.message("\(p.path) is not a git repository") }
         let s = slug(t.title)
         let branch = "agent/\(t.id)" + (s.isEmpty ? "" : "-\(s)")
         let path = AppSettings.worktreeRoot + "/\(slug(p.name).isEmpty ? p.id : slug(p.name))-\(p.id)/\(t.id)" + (s.isEmpty ? "" : "-\(s)")
@@ -41,15 +41,15 @@ enum Workspaces {
     }
 
     static func prompt(task t: TaskItem, branch: String, base: String, isolated: Bool) -> String {
-        var s = "Задача #\(t.id) с доски AgentBoard: \(t.title)"
-        if !t.client.isEmpty { s += " (клиент: \(t.client))" }
+        var s = "Task #\(t.id) from the AgentBoard board: \(t.title)"
+        if !t.client.isEmpty { s += " (client: \(t.client))" }
         if !t.details.trimmed.isEmpty { s += "\n\n\(t.details.trimmed)" }
         s += "\n\n"
         if isolated {
-            s += "Ты работаешь в отдельном git worktree на ветке \(branch) (ответвлена от \(base)). Коммить в эту ветку; "
-                + "в \(base) не переключайся и не сливай — это сделает человек после ревью. "
+            s += "You are working in a separate git worktree on branch \(branch) (branched off \(base)). Commit to this branch; "
+                + "don't switch to or merge into \(base) — the human will do that after review. "
         }
-        s += "Задача уже назначена тебе. Когда закончишь — update_task(task_id: \(t.id), status: \"review\", note: \"что сделано и как проверить\")."
+        s += "The task is already assigned to you. When you're done — update_task(task_id: \(t.id), status: \"review\", note: \"what was done and how to verify it\")."
         return s
     }
 
@@ -64,7 +64,7 @@ enum Workspaces {
         try FileManager.default.createDirectory(atPath: promptDir, withIntermediateDirectories: true)
         let promptFile = promptDir + "/task-\(t.id).txt"
         try text.write(toFile: promptFile, atomically: true, encoding: .utf8)
-        guard let exe = Shell.which(tool) else { throw Failure.message("Не найден `\(tool)` в PATH") }
+        guard let exe = Shell.which(tool) else { throw Failure.message("`\(tool)` not found in PATH") }
         let cmd = "cd \(shq(dir)) && \(shq(exe)) \"$(cat \(shq(promptFile)))\""
 
         let core = Core.shared
@@ -74,12 +74,12 @@ enum Workspaces {
             if isolated { f["worktree"] = dir; f["branch"] = branch; f["base_branch"] = base }
             core.db.update("tasks", id: t.id, f)
             core.addEvent(project: p.id, agent: nil, kind: "workspace",
-                          title: "Вы запустили \(tool == "codex" ? "Codex" : "Claude Code") на задачу #\(t.id) «\(t.title.trunc(100))»"
-                              + (isolated ? " в ветке \(branch)" : ""), detail: dir, ref: "\(t.id)")
+                          title: "You launched \(tool == "codex" ? "Codex" : "Claude Code") on task #\(t.id) \"\(t.title.trunc(100))\""
+                              + (isolated ? " on branch \(branch)" : ""), detail: dir, ref: "\(t.id)")
             core.changed()
         }
         try openTerminal(cmd)
-        return isolated ? "Агент запущен в \(dir) (ветка \(branch))." : "Агент запущен в \(dir)."
+        return isolated ? "Agent launched in \(dir) (branch \(branch))." : "Agent launched in \(dir)."
     }
 
     static func shq(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
@@ -105,8 +105,8 @@ enum Workspaces {
         }
         let r = Shell.run("/usr/bin/osascript", ["-e", script], timeout: 20)
         guard r.ok else {
-            throw Failure.message("Не удалось открыть терминал: \(r.err.trimmed)".trunc(400)
-                + (r.err.contains("-1743") ? " — разрешите AgentBoard управлять терминалом в Системных настройках → Конфиденциальность → Автоматизация." : ""))
+            throw Failure.message("Couldn't open the terminal: \(r.err.trimmed)".trunc(400)
+                + (r.err.contains("-1743") ? " — allow AgentBoard to control the terminal in System Settings → Privacy & Security → Automation." : ""))
         }
     }
 
@@ -139,28 +139,28 @@ enum Workspaces {
     static func merge(task t: TaskItem, project p: Project) throws -> String {
         let cur = Shell.git(["rev-parse", "--abbrev-ref", "HEAD"], cwd: p.path)
         guard cur.line == t.baseBranch else {
-            throw Failure.message("В \(p.path) сейчас ветка \(cur.line), а задача ответвлена от \(t.baseBranch). Переключитесь на \(t.baseBranch) и повторите.")
+            throw Failure.message("\(p.path) is currently on branch \(cur.line), but the task branched off \(t.baseBranch). Switch to \(t.baseBranch) and try again.")
         }
         let dirty = Shell.git(["status", "--porcelain", "--untracked-files=no"], cwd: p.path)
-        guard dirty.out.trimmed.isEmpty else { throw Failure.message("В \(p.path) есть незакоммиченные изменения — сначала разберитесь с ними.") }
+        guard dirty.out.trimmed.isEmpty else { throw Failure.message("\(p.path) has uncommitted changes — deal with them first.") }
         if !t.worktree.isEmpty {
             let wip = Shell.git(["status", "--porcelain"], cwd: t.worktree)
-            if !wip.out.trimmed.isEmpty { throw Failure.message("В рабочей копии задачи есть незакоммиченные изменения — попросите агента закоммитить.") }
+            if !wip.out.trimmed.isEmpty { throw Failure.message("The task's worktree has uncommitted changes — ask the agent to commit them.") }
         }
         let r = Shell.git(["merge", "--no-ff", t.branch, "-m", "Merge #\(t.id): \(t.title)"], cwd: p.path, timeout: 60)
         guard r.ok else {
             _ = Shell.git(["merge", "--abort"], cwd: p.path)
-            throw Failure.message("Слияние не удалось (конфликт?) — отменено.\n\((r.out + r.err).trunc(800))")
+            throw Failure.message("Merge failed (conflict?) — aborted.\n\((r.out + r.err).trunc(800))")
         }
-        return "Ветка \(t.branch) слита в \(t.baseBranch)."
+        return "Branch \(t.branch) merged into \(t.baseBranch)."
     }
 
     static func createPR(task t: TaskItem, project p: Project) throws -> String {
-        guard let gh = Shell.which("gh") else { throw Failure.message("Нужен GitHub CLI (gh)") }
+        guard let gh = Shell.which("gh") else { throw Failure.message("GitHub CLI (gh) is required") }
         let dir = t.worktree.isEmpty ? p.path : t.worktree
         let push = Shell.git(["push", "-u", "origin", t.branch], cwd: dir, timeout: 120)
         guard push.ok else { throw Failure.message("git push: \(push.err.trimmed)".trunc(600)) }
-        let body = (t.details.isEmpty ? "" : t.details + "\n\n") + "Задача #\(t.id) из AgentBoard."
+        let body = (t.details.isEmpty ? "" : t.details + "\n\n") + "Task #\(t.id) from AgentBoard."
         let r = Shell.run(gh, ["pr", "create", "--head", t.branch, "--base", t.baseBranch, "--title", t.title, "--body", body],
                           cwd: dir, timeout: 120)
         guard r.ok else { throw Failure.message("gh pr create: \((r.err + r.out).trimmed)".trunc(600)) }
@@ -171,7 +171,7 @@ enum Workspaces {
         guard !t.worktree.isEmpty else { return }
         if FileManager.default.fileExists(atPath: t.worktree) {
             let r = Shell.git(["worktree", "remove", t.worktree], cwd: p.path, timeout: 60)
-            guard r.ok else { throw Failure.message("git worktree remove: \(r.err.trimmed) — возможно, там незакоммиченные изменения.".trunc(500)) }
+            guard r.ok else { throw Failure.message("git worktree remove: \(r.err.trimmed) — it may have uncommitted changes.".trunc(500)) }
         }
         Core.shared.q.sync {
             Core.shared.db.update("tasks", id: t.id, ["worktree": ""])

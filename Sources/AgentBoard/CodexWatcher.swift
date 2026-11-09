@@ -143,7 +143,7 @@ extension Core {
     static func patchFiles(_ patch: String) -> [(verb: String, path: String)] {
         var out: [(String, String)] = []
         for line in patch.split(separator: "\n") {
-            for (prefix, verb) in [("*** Update File: ", "правит"), ("*** Add File: ", "создаёт"), ("*** Delete File: ", "удаляет")]
+            for (prefix, verb) in [("*** Update File: ", "editing"), ("*** Add File: ", "creating"), ("*** Delete File: ", "deleting")]
             where line.hasPrefix(prefix) {
                 out.append((verb, String(line.dropFirst(prefix.count)).trimmed))
             }
@@ -160,7 +160,8 @@ extension Core {
             return
         }
         if type == "turn_context", let cwd = p.str("cwd") { st.cwd = cwd; return }
-        guard !st.sessionId.isEmpty, let project = projectFor(cwd: st.cwd) else { return }
+        // Sessions that report through Codex hooks are already on the board, live.
+        guard !st.sessionId.isEmpty, !hookSessions.contains(st.sessionId), let project = projectFor(cwd: st.cwd) else { return }
 
         let kind = p.s("type")
         func agent() -> Agent { touchAgent(tool: "codex", sessionId: st.sessionId, project: project, cwd: st.cwd, transcript: nil, revive: true) }
@@ -171,20 +172,21 @@ extension Core {
             guard !text.isEmpty, text != st.lastUser else { return }
             st.lastUser = text
             let a = agent()
-            setAgent(a.id, ["status": "working", "last_prompt": text.trunc(2000), "last_action": "получил запрос"])
+            setAgent(a.id, ["status": "working", "last_prompt": text.trunc(2000), "last_action": "got a request"])
+            onPrompt?(a, text)
             addEvent(project: project.id, agent: a.id, kind: "prompt", title: "\(a.name): \(text.oneLine.trunc(160))", detail: text.trunc(4000))
 
         case ("event_msg", "agent_message"):
             let text = p.s("message").trimmed
             guard !text.isEmpty else { return }
             st.lastAnswer = text
-            setAgent(agent().id, ["last_action": "пишет: " + text.oneLine.trunc(160)])
+            setAgent(agent().id, ["last_action": "writing: " + text.oneLine.trunc(160)])
 
         case ("event_msg", "task_complete"), ("event_msg", "turn_complete"):
             let a = agent()
             let answer = p.str("last_agent_message") ?? st.lastAnswer
-            setAgent(a.id, ["status": "idle", "last_action": answer.isEmpty ? "ход завершён" : "ответил: " + answer.oneLine.trunc(160)])
-            addEvent(project: project.id, agent: a.id, kind: "turn_done", title: "\(a.name) завершил ход", detail: answer.trunc(3000))
+            setAgent(a.id, ["status": "idle", "last_action": answer.isEmpty ? "turn finished" : "replied: " + answer.oneLine.trunc(160)])
+            addEvent(project: project.id, agent: a.id, kind: "turn_done", title: "\(a.name) finished a turn", detail: answer.trunc(3000))
             st.lastAnswer = ""
 
         case ("response_item", "function_call"), ("", "function_call"),
@@ -204,9 +206,9 @@ extension Core {
                 addAction(agent: a, title: "$ " + cmd.oneLine.trunc(240), detail: cmd.trunc(2000))
                 if Self.isGitCommit(cmd) {
                     commitIntent[repoRoot(st.cwd)] = (a.id, now())
-                    addEvent(project: project.id, agent: a.id, kind: "commit_request", title: "\(a.name) коммитит (Codex)", detail: cmd)
+                    addEvent(project: project.id, agent: a.id, kind: "commit_request", title: "\(a.name) is committing (Codex)", detail: cmd)
                     if AppSettings.commitMode != .off {
-                        notify?("\(a.name) коммитит · \(project.name)", cmd.oneLine.trunc(200))
+                        notify?("\(a.name) is committing · \(project.name)", cmd.oneLine.trunc(200))
                     }
                 } else if Self.isGitPush(cmd) {
                     addEvent(project: project.id, agent: a.id, kind: "push", title: "\(a.name): git push", detail: cmd)
@@ -217,21 +219,21 @@ extension Core {
                 recordPatch(input.isEmpty ? (args.str("input") ?? args.s("patch")) : input, agent: a, project: project)
             } else if name == "update_plan" {
                 let steps = (args["plan"] as? [JSON])?.map { "[\($0.s("status"))] \($0.s("step"))" } ?? []
-                setAgent(a.id, ["status": "working", "last_action": "обновил план"])
-                addAction(agent: a, title: "план: " + (steps.first { $0.hasPrefix("[in_progress]") } ?? steps.first ?? "").trunc(200),
+                setAgent(a.id, ["status": "working", "last_action": "updated the plan"])
+                addAction(agent: a, title: "plan: " + (steps.first { $0.hasPrefix("[in_progress]") } ?? steps.first ?? "").trunc(200),
                           detail: steps.joined(separator: "\n"))
             } else {
                 let short = name.isEmpty ? "tool" : name
                 let argText = args.isEmpty ? input : jsonString(args)
-                setAgent(a.id, ["status": "working", "last_action": "вызывает \(short)"])
+                setAgent(a.id, ["status": "working", "last_action": "calling \(short)"])
                 addAction(agent: a, title: "\(short) \(argText.oneLine.trunc(160))", detail: argText.trunc(2000))
             }
 
         case ("response_item", "web_search_call"):
             let a = agent()
             let q = ((p["action"] as? JSON)?.s("query")) ?? ""
-            setAgent(a.id, ["status": "working", "last_action": "ищет в сети: \(q.trunc(120))"])
-            addAction(agent: a, title: "веб-поиск: \(q.trunc(200))", detail: "")
+            setAgent(a.id, ["status": "working", "last_action": "searching the web: \(q.trunc(120))"])
+            addAction(agent: a, title: "web search: \(q.trunc(200))", detail: "")
 
         default:
             break
@@ -248,22 +250,22 @@ extension Core {
             if let r = reservationConflicts(paths: [rel], project: project.id, except: a.id).first?.1 {
                 let holder = agent(id: r.agentId)?.name ?? r.agentId
                 addEvent(project: project.id, agent: a.id, kind: "conflict",
-                         title: "\(a.name) изменил \(rel), забронированный \(holder)", ref: rel)
-                notify?("Правка чужой брони · \(project.name)", "\(a.name) изменил \(rel) — его забронировал \(holder)")
+                         title: "\(a.name) changed \(rel), reserved by \(holder)", ref: rel)
+                notify?("Edit of a reserved file · \(project.name)", "\(a.name) changed \(rel) — it is reserved by \(holder)")
                 sendMessage(project: project.id, to: a.id, from: nil,
-                            text: "Файл \(rel) забронирован агентом \(holder) до \(Fmt.time(r.expiresAt)). Верни свои изменения в нём или согласуй с \(holder) через send_message.")
+                            text: "File \(rel) is reserved by agent \(holder) until \(Fmt.time(r.expiresAt)). Revert your changes to it or coordinate with \(holder) via send_message.")
             }
             let others = AppSettings.conflictWarnings ? othersTouching(path: rel, project: project.id, except: a.id) : []
             if !others.isEmpty {
                 let names = others.map { $0.name }.joined(separator: ", ")
                 addEvent(project: project.id, agent: a.id, kind: "conflict",
-                         title: "\(a.name) правит \(rel), который недавно менял(и) \(names)", ref: rel)
+                         title: "\(a.name) is editing \(rel), recently changed by \(names)", ref: rel)
                 if AppSettings.notifyConflicts {
-                    notify?("Возможный конфликт · \(project.name)", "\(a.name) правит \(rel) — его недавно менял(и) \(names)")
+                    notify?("Possible conflict · \(project.name)", "\(a.name) is editing \(rel) — recently changed by \(names)")
                 }
                 // Codex has no hook to warn it directly; it learns on its next agentboard call.
                 sendMessage(project: project.id, to: a.id, from: nil,
-                            text: "Внимание: файл \(rel) недавно правил(и) \(names). Не затирай их изменения; согласуй через send_message.")
+                            text: "Heads up: file \(rel) was recently edited by \(names). Don't overwrite their changes; coordinate via send_message.")
             }
         }
     }

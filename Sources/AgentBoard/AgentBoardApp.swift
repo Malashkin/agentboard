@@ -7,8 +7,9 @@ struct AgentBoardApp: App {
     @StateObject private var store = Store.shared
 
     init() {
-        // CLI mode: `AgentBoard --install-claude [--install-codex]` runs the same installers as the "Подключения" screen.
+        // CLI mode: `AgentBoard --install-claude [--install-codex]` runs the same installers as the "Connections" screen.
         let args = CommandLine.arguments
+        if args.contains("--self-test") { exit(SelfTest.run()) }
         if args.contains("--install-claude") || args.contains("--install-codex") || args.contains("--uninstall-claude") {
             Pref.registerDefaults()
             Integrations.writeBridge()
@@ -68,11 +69,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try core.q.sync { try core.setup() }
         } catch {
-            store.serverError = "База данных: \(error.localizedDescription)"
+            store.serverError = "Database: \(error.localizedDescription)"
             return
         }
         core.onChange = { store.scheduleReload() }
         core.notify = { title, body in Notifier.shared.post(title, body) }
+        core.notifyRequest = { p in Notifier.shared.postRequest(p) }
+        core.requestResolved = { id in Notifier.shared.remove(request: id) }
+        core.notifyWaitingAgent = { a, title, body in Notifier.shared.postWaiting(agentId: a.id, title: title, body: body) }
+        core.onPrompt = { a, prompt in TaskAutopilot.shared.onPrompt(a, prompt) }
+        core.onSessionEnd = { a in TaskAutopilot.shared.onSessionEnd(a) }
+        core.q.async { core.cleanupOldData() }
         store.reload()
 
         Integrations.writeBridge()
@@ -83,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CodexWatcher.shared.start()
         SessionLiveness.shared.start()
         Narrator.shared.start()
+        AwayWatcher.shared.start()
         // Keep each project's git hooks current (pre-commit guard added in newer versions, moved folders).
         DispatchQueue.global(qos: .utility).async {
             for p in core.q.sync(execute: { core.allProjects() }) { try? Integrations.installGitHook(p) }
@@ -119,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         do { try s.start() } catch {
-            Store.shared.serverError = "Сервер на порту \(port): \(error.localizedDescription)"
+            Store.shared.serverError = "Server on port \(port): \(error.localizedDescription)"
         }
         server = s
     }

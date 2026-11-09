@@ -16,22 +16,22 @@ struct MainView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 Section {
-                    Label("Обзор", systemImage: "square.grid.2x2").tag(NavItem.overview)
-                    Label("История", systemImage: "calendar").tag(NavItem.history)
-                    Label("Сводки", systemImage: "doc.richtext").tag(NavItem.summaries)
-                    Label("Подключения", systemImage: "point.3.connected.trianglepath.dotted").tag(NavItem.integrations)
+                    Label("Overview", systemImage: "square.grid.2x2").tag(NavItem.overview)
+                    Label("History", systemImage: "calendar").tag(NavItem.history)
+                    Label("Summaries", systemImage: "doc.richtext").tag(NavItem.summaries)
+                    Label("Integrations", systemImage: "point.3.connected.trianglepath.dotted").tag(NavItem.integrations)
                 }
-                Section("Проекты") {
+                Section("Projects") {
                     ForEach(store.orderedProjects) { p in
                         HStack {
                             Label {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(p.name)
                                     if store.importing.contains(p.id) {
-                                        Text("загружаю историю…").font(.caption2).foregroundStyle(.secondary)
+                                        Text("Loading history…").font(.caption2).foregroundStyle(.secondary)
                                     } else if let t = store.lastWork[p.id] {
                                         Text(Self.lastWorkLabel(t, now: store.now)).font(.caption2).foregroundStyle(.secondary)
-                                            .help("Последняя работа агентов: " + Fmt.dayHuman.string(from: Date(timeIntervalSince1970: t)) + ", " + Fmt.time(t))
+                                            .help("Last agent activity: " + Fmt.dayHuman.string(from: Date(timeIntervalSince1970: t)) + ", " + Fmt.time(t))
                                     }
                                 }
                             } icon: { Image(systemName: "folder") }
@@ -55,11 +55,11 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 210, ideal: 240)
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    Button { addProject() } label: { Label("Добавить проект", systemImage: "plus") }
+                    Button { addProject() } label: { Label("Add project", systemImage: "plus") }
                         .buttonStyle(.borderless)
                     Spacer()
                     Circle().fill(store.serverRunning ? Color.green : Color.red).frame(width: 7, height: 7)
-                        .help(store.serverRunning ? "Сервер работает на 127.0.0.1:\(AppSettings.port)" : "Сервер не запущен")
+                        .help(store.serverRunning ? "Server running on 127.0.0.1:\(AppSettings.port)" : "Server not running")
                 }
                 .padding(10)
             }
@@ -70,6 +70,9 @@ struct MainView: View {
                 }
                 if let err = store.lastError {
                     Banner(text: err, color: .orange, icon: "exclamationmark.triangle") { store.lastError = nil }
+                }
+                if let d = store.awayDigest {
+                    AwayBanner(digest: d).transition(.move(edge: .top).combined(with: .opacity))
                 }
                 if !store.pending.isEmpty && !isDashboard {
                     ApprovalsBanner().transition(.move(edge: .top).combined(with: .opacity))
@@ -93,7 +96,7 @@ struct MainView: View {
         }
         .tint(theme.accent)
         .preferredColorScheme(theme.colorScheme)
-        .alert("Не удалось добавить проект", isPresented: Binding(get: { addError != nil }, set: { if !$0 { addError = nil } })) {
+        .alert("Couldn’t add project", isPresented: Binding(get: { addError != nil }, set: { if !$0 { addError = nil } })) {
             Button("OK") { addError = nil }
         } message: { Text(addError ?? "") }
     }
@@ -109,10 +112,10 @@ struct MainView: View {
         let d = Date(timeIntervalSince1970: t)
         let cal = Calendar.current
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ru_RU")
-        if cal.isDateInToday(d) { f.dateFormat = "HH:mm"; return "сегодня, " + f.string(from: d) }
-        if cal.isDateInYesterday(d) { f.dateFormat = "HH:mm"; return "вчера, " + f.string(from: d) }
-        f.dateFormat = cal.isDate(d, equalTo: now, toGranularity: .year) ? "d MMM" : "d MMM yyyy"
+        f.locale = Locale(identifier: "en_US")
+        if cal.isDateInToday(d) { f.dateFormat = "HH:mm"; return "today, " + f.string(from: d) }
+        if cal.isDateInYesterday(d) { f.dateFormat = "HH:mm"; return "yesterday, " + f.string(from: d) }
+        f.dateFormat = cal.isDate(d, equalTo: now, toGranularity: .year) ? "MMM d" : "MMM d, yyyy"
         return f.string(from: d)
     }
 
@@ -121,8 +124,8 @@ struct MainView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Добавить"
-        panel.message = "Выберите папку проекта (git-репозиторий), над которым работают агенты"
+        panel.prompt = "Add"
+        panel.message = "Choose the project folder (a git repository) your agents work in"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         store.addProject(path: url.path) { err in
             if let err { addError = err }
@@ -146,6 +149,29 @@ struct Banner: View {
         .padding(10)
         .foregroundStyle(color)
         .background(color.opacity(0.1))
+    }
+}
+
+struct AwayBanner: View {
+    @EnvironmentObject var store: Store
+    let digest: AwayDigest
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "sunrise.fill").foregroundStyle(.orange)
+                Text("While you were away · \(TimeReport.format(digest.to - digest.from))").font(.headline)
+                if digest.commits > 0 { Pill(text: "\(digest.commits) commits", color: .purple, icon: "checkmark.seal") }
+                if digest.questions > 0 { Pill(text: "\(digest.questions) waiting for you", color: .orange, icon: "hand.raised") }
+                if digest.stuck > 0 { Pill(text: "\(digest.stuck) stuck", color: .red, icon: "arrow.triangle.2.circlepath") }
+                if digest.writing { ProgressView().controlSize(.small) }
+                Spacer()
+                Button { withAnimation(ThemeStore.shared.anim()) { store.awayDigest = nil } } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+            }
+            Text(digest.text.isEmpty ? "Summarizing…" : digest.text).font(.callout).textSelection(.enabled)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.08))
     }
 }
 
@@ -180,10 +206,10 @@ struct ApprovalRow: View {
 
     var heading: String {
         switch item.kind {
-        case "question": return "\(item.agentName) спрашивает · \(item.projectName)"
-        case "plan": return "\(item.agentName) предлагает план · \(item.projectName)"
-        case "permission": return "\(item.agentName) просит разрешение · \(item.projectName)"
-        default: return "\(item.agentName) хочет сделать коммит · \(item.projectName)"
+        case "question": return "\(item.agentName) is asking · \(item.projectName)"
+        case "plan": return "\(item.agentName) proposes a plan · \(item.projectName)"
+        case "permission": return "\(item.agentName) needs permission · \(item.projectName)"
+        default: return "\(item.agentName) wants to commit · \(item.projectName)"
         }
     }
 
@@ -199,8 +225,8 @@ struct ApprovalRow: View {
                     }
                     let left = max(0, Int(item.deadline - store.now.timeIntervalSince1970))
                     Text(item.kind == "commit"
-                         ? "Без решения через \(left / 60):\(String(format: "%02d", left % 60)) вопрос уйдёт в терминал"
-                         : "Тот же вопрос открыт в терминале агента — ответить можно там или здесь")
+                         ? "No decision in \(left / 60):\(String(format: "%02d", left % 60)) and the question goes to the terminal"
+                         : "The same question is open in the agent’s terminal. Answer there or here.")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -215,15 +241,15 @@ struct ApprovalRow: View {
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
                 }
                 HStack {
-                    TextField("Что изменить в плане", text: $comment).textFieldStyle(.roundedBorder)
-                    Button("На доработку") { store.decide(item.id, allow: false, comment: comment) }
+                    TextField("What should change in the plan", text: $comment).textFieldStyle(.roundedBorder)
+                    Button("Request changes") { store.decide(item.id, allow: false, comment: comment) }
                         .disabled(comment.trimmed.isEmpty)
-                    Button("Одобрить план") { store.decide(item.id, allow: true, comment: "") }
+                    Button("Approve plan") { store.decide(item.id, allow: true, comment: "") }
                         .buttonStyle(.borderedProminent)
                 }
             } else {
                 if !compact && !item.gitStatus.isEmpty {
-                    DisclosureGroup(item.kind == "commit" ? "Изменения (git status)" : "Подробности", isExpanded: $showStatus) {
+                    DisclosureGroup(item.kind == "commit" ? "Changes (git status)" : "Details", isExpanded: $showStatus) {
                         ScrollView {
                             Text(item.gitStatus)
                                 .font(.system(.caption, design: .monospaced))
@@ -233,13 +259,13 @@ struct ApprovalRow: View {
                     }.font(.caption)
                 }
                 HStack {
-                    TextField("Комментарий агенту (необязательно)", text: $comment).textFieldStyle(.roundedBorder)
-                    Button("Отклонить", role: .destructive) { store.decide(item.id, allow: false, comment: comment) }
+                    TextField("Comment for the agent (optional)", text: $comment).textFieldStyle(.roundedBorder)
+                    Button("Deny", role: .destructive) { store.decide(item.id, allow: false, comment: comment) }
                     if item.canAlwaysAllow {
-                        Button("Разрешать в этой сессии") { store.decide(item.id, allow: true, comment: comment, always: true) }
-                            .help("Как «Yes, don't ask again» в терминале, но только до конца сессии")
+                        Button("Allow for this session") { store.decide(item.id, allow: true, comment: comment, always: true) }
+                            .help("Like “Yes, don't ask again” in the terminal, but only until the session ends")
                     }
-                    Button("Разрешить") { store.decide(item.id, allow: true, comment: comment) }
+                    Button("Allow") { store.decide(item.id, allow: true, comment: comment) }
                         .buttonStyle(.borderedProminent)
                 }
             }
@@ -278,7 +304,7 @@ struct ApprovalRow: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    TextField("Свой вариант", text: Binding(get: { other[q.question] ?? "" }, set: {
+                    TextField("Other answer", text: Binding(get: { other[q.question] ?? "" }, set: {
                         other[q.question] = $0
                         if !$0.isEmpty && !q.multiSelect { picks[q.question] = [] }
                     }))
@@ -287,7 +313,7 @@ struct ApprovalRow: View {
             }
             HStack {
                 Spacer()
-                Button("Ответить") { store.decide(item.id, allow: true, comment: "", answers: answers) }
+                Button("Answer") { store.decide(item.id, allow: true, comment: "", answers: answers) }
                     .buttonStyle(.borderedProminent)
                     .disabled(answers.count < item.questions.count)
             }

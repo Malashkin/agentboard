@@ -6,25 +6,25 @@ enum DeliveryMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .auto: return "Авто"
-        case .terminal: return "Напечатать в терминал агента"
-        case .inbox: return "В контекст при следующем шаге"
-        case .resume: return "Продолжить сессию в фоне"
+        case .auto: return "Auto"
+        case .terminal: return "Type into the agent's terminal"
+        case .inbox: return "Into context at the next step"
+        case .resume: return "Resume the session in the background"
         }
     }
     var help: String {
         switch self {
-        case .auto: return "Работает → в контекст на следующем шаге; ждёт ввода → печатаем в его терминал; иначе — в очередь."
-        case .terminal: return "Текст вводится во вкладку Terminal.app / iTerm2 / tmux, где запущен агент, и отправляется Enter — как будто вы написали сам."
-        case .inbox: return "Агент увидит комментарий после ближайшего действия, при следующем запросе или в конце хода (и продолжит работу)."
-        case .resume: return "Новый запуск той же сессии без терминала (claude -p --resume / codex exec resume). Для закрытых сессий. Не используйте, пока сессия открыта в терминале."
+        case .auto: return "Working → into context at the next step; waiting for input → typed into its terminal; otherwise — queued."
+        case .terminal: return "The text is typed into the Terminal.app / iTerm2 / tmux tab where the agent runs and sent with Enter — as if you typed it yourself."
+        case .inbox: return "The agent sees the comment after its next action, on the next prompt, or at the end of the turn (and keeps working)."
+        case .resume: return "A new run of the same session without a terminal (claude -p --resume / codex exec resume). For closed sessions. Don't use it while the session is open in a terminal."
         }
     }
 }
 
 /// Sends a human comment into a specific agent session so the agent continues with it.
 enum SessionDelivery {
-    static let prefix = "[Комментарий из AgentBoard] "
+    static let prefix = "[Comment from AgentBoard] "
 
     /// Runs off the main thread; completion on main with a human-readable result.
     static func deliver(agentId: String, text: String, mode: DeliveryMode, completion: @escaping (String) -> Void) {
@@ -36,12 +36,12 @@ enum SessionDelivery {
 
     private static func run(agentId: String, text: String, mode: DeliveryMode) -> String {
         let core = Core.shared
-        guard let a = core.q.sync(execute: { core.agent(id: agentId) }) else { return "Агент не найден" }
+        guard let a = core.q.sync(execute: { core.agent(id: agentId) }) else { return "Agent not found" }
         let st = a.displayStatus(staleMinutes: AppSettings.staleMinutes)
         let log: (String, String) -> Void = { kind, how in
             core.q.async {
                 core.addEvent(project: a.projectId, agent: nil, kind: "message",
-                              title: "Вы → \(a.name) (\(how)): \(text.oneLine.trunc(160))", detail: text)
+                              title: "You → \(a.name) (\(how)): \(text.oneLine.trunc(160))", detail: text)
                 core.changed()
                 _ = kind
             }
@@ -49,25 +49,25 @@ enum SessionDelivery {
         func toInbox() -> String {
             core.q.sync { _ = core.sendMessage(project: a.projectId, to: a.id, from: nil, text: text) }
             return st == .working
-                ? "Комментарий попадёт к \(a.name) на ближайшем шаге — агент продолжит с его учётом."
-                : "Комментарий в очереди: \(a.name) получит его при следующем действии или запросе."
+                ? "\(a.name) will get the comment at its next step and continue with it in mind."
+                : "Comment queued: \(a.name) will get it on its next action or prompt."
         }
 
         switch mode {
         case .inbox:
             return toInbox()
         case .terminal:
-            if let how = typeIntoTerminal(a, text) { log("message", how); return "Отправлено в терминал \(a.name) (\(how))." }
-            return "Не нашёл терминал \(a.name). Поддерживаются Terminal.app, iTerm2 и tmux; для Claude Code нужен хотя бы один запрос после подключения хуков. Попробуйте «В контекст» или «Продолжить в фоне»."
+            if let how = typeIntoTerminal(a, text) { log("message", how); return "Sent to \(a.name)'s terminal (\(how))." }
+            return "Couldn't find \(a.name)'s terminal. Terminal.app, iTerm2 and tmux are supported; Claude Code needs at least one prompt after the hooks are installed. Try \"Into context\" or \"Resume in the background\"."
         case .resume:
             return resume(a, text)
         case .auto:
             if st == .working { return toInbox() }
             if st == .waiting || st == .idle || st == .stale, let how = typeIntoTerminal(a, text) {
                 log("message", how)
-                return "Агент \(a.name) ждал ввода — комментарий напечатан в его терминал (\(how)), он продолжает работу."
+                return "\(a.name) was waiting for input — the comment was typed into its terminal (\(how)), and it is continuing."
             }
-            return toInbox() + (st == .ended ? " Сессия закрыта — чтобы продолжить её сейчас, выберите «Продолжить сессию в фоне»." : "")
+            return toInbox() + (st == .ended ? " The session is closed — to continue it now, choose \"Resume the session in the background\"." : "")
         }
     }
 
@@ -175,11 +175,11 @@ enum SessionDelivery {
             exe = Shell.which("codex")
             args = ["exec", "resume", a.sessionId, message]
         }
-        guard let exe, !a.sessionId.hasPrefix("mcp-") else { return "Для этого агента фоновое продолжение недоступно" }
+        guard let exe, !a.sessionId.hasPrefix("mcp-") else { return "Background resume isn't available for this agent" }
         core.q.async {
             core.addEvent(project: a.projectId, agent: a.id, kind: "message",
-                          title: "Вы → \(a.name) (фоновое продолжение): \(text.oneLine.trunc(160))", detail: text)
-            core.setAgent(a.id, ["status": "working", "last_action": "продолжает в фоне по вашему комментарию"])
+                          title: "You → \(a.name) (background resume): \(text.oneLine.trunc(160))", detail: text)
+            core.setAgent(a.id, ["status": "working", "last_action": "continuing in the background on your comment"])
             core.changed()
         }
         DispatchQueue.global().async {
@@ -198,7 +198,7 @@ enum SessionDelivery {
             p.standardInput = FileHandle.nullDevice
             do { try p.run() } catch {
                 core.q.async {
-                    core.addEvent(project: a.projectId, agent: a.id, kind: "waiting", title: "Не удалось продолжить \(a.name): \(error.localizedDescription)")
+                    core.addEvent(project: a.projectId, agent: a.id, kind: "waiting", title: "Couldn't resume \(a.name): \(error.localizedDescription)")
                     core.changed()
                 }
                 return
@@ -208,13 +208,13 @@ enum SessionDelivery {
             let output = String(decoding: data, as: UTF8.self).trimmed
             core.q.async {
                 core.addEvent(project: a.projectId, agent: a.id, kind: "turn_done",
-                              title: "\(a.name) закончил фоновое продолжение" + (p.terminationStatus == 0 ? "" : " (код \(p.terminationStatus))"),
+                              title: "\(a.name) finished the background resume" + (p.terminationStatus == 0 ? "" : " (exit code \(p.terminationStatus))"),
                               detail: output.trunc(4000))
-                core.setAgent(a.id, ["status": "idle", "last_action": "фоновое продолжение завершено"])
+                core.setAgent(a.id, ["status": "idle", "last_action": "background resume finished"])
                 core.changed()
-                core.notify?("\(a.name) закончил работу по комментарию", output.oneLine.trunc(200))
+                core.notify?("\(a.name) finished working on your comment", output.oneLine.trunc(200))
             }
         }
-        return "Запущено фоновое продолжение сессии \(a.name). Действия и результат появятся в ленте."
+        return "Started a background resume of \(a.name)'s session. Its actions and result will appear in the feed."
     }
 }

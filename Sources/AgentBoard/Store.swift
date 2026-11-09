@@ -25,6 +25,7 @@ final class Store: ObservableObject {
     @Published var importing: Set<String> = []
     @Published var lastWork: [String: Double] = [:]
     @Published var reservations: [Reservation] = []
+    @Published var awayDigest: AwayDigest?
     @Published var subagents: [SubagentItem] = []
     @Published var importReport: [String: String] = [:]
 
@@ -144,8 +145,8 @@ final class Store: ObservableObject {
             let r = HistoryImporter.run(project: p)
             DispatchQueue.main.async {
                 self.importing.remove(p.id)
-                self.importReport[p.id] = r.sessions + r.commits == 0 ? "Новых данных не найдено"
-                    : "Загружено: сессий \(r.sessions), событий \(r.events), коммитов \(r.commits)"
+                self.importReport[p.id] = r.sessions + r.commits == 0 ? "No new data found"
+                    : "Imported: \(r.sessions) sessions, \(r.events) events, \(r.commits) commits"
                 self.reload()
             }
         }
@@ -188,7 +189,7 @@ final class Store: ObservableObject {
     }
     func addNote(project: String, text: String, client: String) {
         core { c in
-            c.addEvent(project: project, agent: nil, kind: "note", title: "Вы: \(text.oneLine.trunc(200))", detail: text, client: client)
+            c.addEvent(project: project, agent: nil, kind: "note", title: "You: \(text.oneLine.trunc(200))", detail: text, client: client)
             c.changed()
         }
     }
@@ -200,6 +201,7 @@ final class Store: ObservableObject {
     func reservations(of agent: String) -> [Reservation] { reservations.filter { $0.agentId == agent } }
     func subagents(of agent: String) -> [SubagentItem] { subagents.filter { $0.agentId == agent } }
     func dropReservation(_ id: Int64) { core { $0.dropReservation(id: id) } }
+    func pinAgent(_ id: String, to project: String) { core { $0.pinAgent(id, to: project) } }
 
     /// Runs git/terminal work off the main thread; completion on main with an error text or nil.
     func workspace(_ work: @escaping () throws -> String?, done: @escaping (String?, String?) -> Void) {
@@ -220,7 +222,7 @@ final class Store: ObservableObject {
         SummaryService.generate(day: day) { [weak self] result in
             self?.generatingDays.remove(key)
             if case .success(let s) = result {
-                Notifier.shared.post("Сводка за \(s.day) готова", s.markdown.split(separator: "\n").dropFirst().first.map(String.init) ?? "")
+                Notifier.shared.post("Summary for \(s.day) is ready", s.markdown.split(separator: "\n").dropFirst().first.map(String.init) ?? "")
             }
         }
     }
@@ -237,7 +239,7 @@ final class Store: ObservableObject {
             do {
                 if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {
-                lastError = "Автозапуск: \(error.localizedDescription)"
+                lastError = "Launch at login: \(error.localizedDescription)"
             }
             objectWillChange.send()
         }

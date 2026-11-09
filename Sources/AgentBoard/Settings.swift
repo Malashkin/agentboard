@@ -5,9 +5,9 @@ enum CommitMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .off: return "Только записывать в ленту"
-        case .notify: return "Уведомлять"
-        case .approve: return "Спрашивать одобрение"
+        case .off: return "Only log to the feed"
+        case .notify: return "Notify"
+        case .approve: return "Ask for approval"
         }
     }
 }
@@ -37,6 +37,9 @@ enum Pref {
     static let terminalApp = "terminalApp"
     static let worktreeRoot = "worktreeRoot"
     static let narrator = "narrator"
+    static let autoTasks = "autoTasks"
+    static let awayDigest = "awayDigest"
+    static let awayMinutes = "awayMinutes"
     static let narratorMinutes = "narratorMinutes"
     static let narratorModel = "narratorModel"
 
@@ -65,6 +68,9 @@ enum Pref {
             terminalApp: "Terminal",
             worktreeRoot: NSHomeDirectory() + "/.agentboard/worktrees",
             narrator: true,
+            autoTasks: true,
+            awayDigest: true,
+            awayMinutes: 20.0,
             narratorMinutes: 2.0,
             narratorModel: "haiku",
         ])
@@ -95,9 +101,13 @@ enum AppSettings {
     static var stuckNudge: Bool { d.bool(forKey: Pref.stuckNudge) }
     static var terminalApp: String { d.string(forKey: Pref.terminalApp) ?? "Terminal" }
     static var narrator: Bool { d.bool(forKey: Pref.narrator) }
+    static var autoTasks: Bool { d.bool(forKey: Pref.autoTasks) }
+    static var awayDigest: Bool { d.bool(forKey: Pref.awayDigest) }
+    static var awayMinutes: Double { max(5, d.double(forKey: Pref.awayMinutes)) }
     static var narratorMinutes: Double { max(0.5, d.double(forKey: Pref.narratorMinutes)) }
     static var narratorModel: String { (d.string(forKey: Pref.narratorModel) ?? "").trimmed.isEmpty ? "haiku" : d.string(forKey: Pref.narratorModel)!.trimmed }
     static var worktreeRoot: String {
+        if let e = ProcessInfo.processInfo.environment["AGENTBOARD_WORKTREE_ROOT"], !e.isEmpty { return e }
         let v = d.string(forKey: Pref.worktreeRoot) ?? ""
         return v.isEmpty ? NSHomeDirectory() + "/.agentboard/worktrees" : (v as NSString).expandingTildeInPath
     }

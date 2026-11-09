@@ -3,24 +3,24 @@ import Foundation
 /// MCP over Streamable HTTP (JSON responses only, no SSE). Runs on Core.q.
 extension Core {
     static let mcpInstructions = """
-    AgentBoard — общая панель для нескольких AI-агентов (Claude Code, Codex), работающих над одним проектом; \
-    человек видит её в приложении AgentBoard. Используй её, чтобы знать, кто что делает, и не мешать друг другу.
-    • board — кто сейчас работает, открытые задачи, свежие коммиты и заметки. Вызови в начале работы.
-    • agent_activity(agent) — подробно, что делает конкретный агент: запросы, команды, файлы, последний ответ. \
-    Используй, когда человек просит «посмотри, что делает соседний агент / другой терминал / Batman».
-    • claim_task / create_task(claim=true) — возьми задачу перед работой; update_task — статус и итог.
-    • set_focus(focus, files) — объяви, над чем работаешь и какие файлы трогаешь.
-    • send_message(to, text) — написать другому агенту или всем (to="all"); post_note — заметка в ленту для человека.
-    • reserve_files(paths, minutes, reason) / release_files(paths) — бронь файлов перед правкой: \
-    другие агенты не смогут их править и коммитить, пока бронь действует.
-    • who_touches(path) — кто недавно менял файл и кто его забронировал.
-    Claude Code определяется автоматически. Другие клиенты (Codex и т.п.) сначала вызывают register_agent(cwd) \
-    и передают полученный agent_id во все вызовы.
+    AgentBoard is a shared board for several AI agents (Claude Code, Codex) working on the same project; \
+    the human watches it in the AgentBoard app. Use it to know who is doing what and to stay out of each other's way.
+    • board — who is working right now, open tasks, recent commits and notes. Call it when you start working.
+    • agent_activity(agent) — details of what a specific agent is doing: prompts, commands, files, last reply. \
+    Use it when the human asks you to "check what the other agent / the other terminal / Batman is doing".
+    • claim_task / create_task(claim=true) — take a task before working on it; update_task — status and outcome.
+    • set_focus(focus, files) — announce what you are working on and which files you are touching.
+    • send_message(to, text) — message another agent or everyone (to="all"); post_note — a note in the feed for the human.
+    • reserve_files(paths, minutes, reason) / release_files(paths) — reserve files before editing them: \
+    other agents can't edit or commit them while the reservation is active.
+    • who_touches(path) — who recently changed a file and who has reserved it.
+    Claude Code is detected automatically. Other clients (Codex etc.) first call register_agent(cwd) \
+    and pass the returned agent_id in every call.
     """
 
     private static func prop(_ type: String, _ desc: String) -> JSON { ["type": type, "description": desc] }
-    private static let agentIdProp = prop("string", "Твой agent_id (Claude Code определяется автоматически, его можно не передавать)")
-    private static let projectProp = prop("string", "Путь к проекту, если agent_id неизвестен")
+    private static let agentIdProp = prop("string", "Your agent_id (Claude Code is detected automatically and can omit it)")
+    private static let projectProp = prop("string", "Project path, if agent_id is unknown")
 
     static var toolDefs: [JSON] {
         func tool(_ name: String, _ desc: String, _ props: JSON, _ required: [String] = [], readOnly: Bool = false) -> JSON {
@@ -34,42 +34,42 @@ extension Core {
         let statusEnum: JSON = ["type": "string", "enum": TaskStatus.allCases.map(\.rawValue),
                                 "description": "backlog | in_progress | review | done"]
         return [
-            tool("board", "Обзор проекта: активные агенты и что они делают, открытые задачи, недавние коммиты и заметки.", [:], readOnly: true),
-            tool("agent_activity", "Что делает другой агент: его запрос, команды, изменённые файлы, коммиты, последний ответ. Без agent — краткий обзор всех агентов проекта.",
-                 ["agent": prop("string", "Имя агента (например «Batman») или его agent_id"),
-                  "limit": prop("integer", "Сколько последних событий показать (по умолчанию 30)")], readOnly: true),
-            tool("list_tasks", "Список задач проекта.",
-                 ["status": statusEnum, "client": prop("string", "Фильтр по клиенту"),
-                  "include_done": prop("boolean", "Включить завершённые")], readOnly: true),
-            tool("create_task", "Создать задачу на общей доске. claim=true — сразу взять её себе.",
-                 ["title": prop("string", "Короткое название"), "details": prop("string", "Подробности"),
-                  "client": prop("string", "Клиент, для которого работа (если есть)"), "status": statusEnum,
-                  "claim": prop("boolean", "Сразу взять задачу себе")], ["title"]),
-            tool("claim_task", "Взять задачу себе. Откажет, если её уже делает другой активный агент (force=true — забрать).",
-                 ["task_id": prop("integer", "Номер задачи"), "force": prop("boolean", "Забрать у другого агента")], ["task_id"]),
-            tool("update_task", "Обновить задачу: статус, итог работы (note), клиент.",
-                 ["task_id": prop("integer", "Номер задачи"), "status": statusEnum,
-                  "note": prop("string", "Что сделано / что осталось"), "client": prop("string", "Клиент"),
-                  "release": prop("boolean", "Снять себя с задачи")], ["task_id"]),
-            tool("set_focus", "Объявить, над чем ты сейчас работаешь и какие файлы трогаешь.",
-                 ["focus": prop("string", "Над чем работаешь"),
-                  "files": ["type": "array", "items": ["type": "string"], "description": "Пути файлов относительно корня репозитория"]],
+            tool("board", "Project overview: active agents and what they are doing, open tasks, recent commits and notes.", [:], readOnly: true),
+            tool("agent_activity", "What another agent is doing: its prompt, commands, changed files, commits, last reply. Without agent — a short overview of all agents in the project.",
+                 ["agent": prop("string", "Agent name (e.g. \"Batman\") or its agent_id"),
+                  "limit": prop("integer", "How many recent events to show (default 30)")], readOnly: true),
+            tool("list_tasks", "List the project's tasks.",
+                 ["status": statusEnum, "client": prop("string", "Filter by client"),
+                  "include_done": prop("boolean", "Include finished tasks")], readOnly: true),
+            tool("create_task", "Create a task on the shared board. claim=true — take it yourself right away.",
+                 ["title": prop("string", "Short title"), "details": prop("string", "Details"),
+                  "client": prop("string", "Client the work is for (if any)"), "status": statusEnum,
+                  "claim": prop("boolean", "Take the task yourself right away")], ["title"]),
+            tool("claim_task", "Take a task. Refuses if another active agent is already on it (force=true — take it over).",
+                 ["task_id": prop("integer", "Task number"), "force": prop("boolean", "Take it over from another agent")], ["task_id"]),
+            tool("update_task", "Update a task: status, outcome (note), client.",
+                 ["task_id": prop("integer", "Task number"), "status": statusEnum,
+                  "note": prop("string", "What was done / what is left"), "client": prop("string", "Client"),
+                  "release": prop("boolean", "Unassign yourself from the task")], ["task_id"]),
+            tool("set_focus", "Announce what you are working on right now and which files you are touching.",
+                 ["focus": prop("string", "What you are working on"),
+                  "files": ["type": "array", "items": ["type": "string"], "description": "File paths relative to the repository root"]],
                  ["focus"]),
-            tool("send_message", "Написать сообщение другому агенту (оно придёт в его контекст) или всем агентам проекта.",
-                 ["to": prop("string", "Имя агента, его agent_id или \"all\""), "text": prop("string", "Текст сообщения")], ["to", "text"]),
-            tool("post_note", "Заметка в ленту проекта для человека и других агентов (решение, предупреждение, итог).",
-                 ["text": prop("string", "Текст заметки"), "client": prop("string", "Клиент, если заметка о нём")], ["text"]),
-            tool("who_touches", "Кто из агентов недавно менял файл и есть ли на нём бронь.", ["path": prop("string", "Путь файла")], ["path"], readOnly: true),
-            tool("reserve_files", "Забронировать файлы, папки или маски (src/auth/, *.sql, src/**/*.ts) перед правкой. Пока бронь действует, другие агенты не смогут их править и коммитить. Повторный вызов продлевает бронь.",
-                 ["paths": ["type": "array", "items": ["type": "string"], "description": "Пути относительно корня репозитория, папки или маски"],
-                  "minutes": prop("integer", "На сколько минут (по умолчанию из настроек, обычно 30)"),
-                  "exclusive": prop("boolean", "true (по умолчанию) — только ты; false — общая бронь, просто предупреждение"),
-                  "reason": prop("string", "Зачем, коротко — увидят другие агенты и человек")], ["paths"]),
-            tool("release_files", "Снять свои брони. Без paths — все.",
-                 ["paths": ["type": "array", "items": ["type": "string"], "description": "Какие брони снять"]]),
-            tool("register_agent", "Зарегистрироваться на панели (для клиентов без хуков, например Codex). Вернёт agent_id.",
-                 ["cwd": prop("string", "Абсолютный путь текущей рабочей папки"),
-                  "tool": prop("string", "codex, cursor, …"), "name": prop("string", "Желаемое имя")], ["cwd"]),
+            tool("send_message", "Send a message to another agent (it lands in its context) or to all agents in the project.",
+                 ["to": prop("string", "Agent name, its agent_id, or \"all\""), "text": prop("string", "Message text")], ["to", "text"]),
+            tool("post_note", "A note in the project feed for the human and other agents (decision, warning, outcome).",
+                 ["text": prop("string", "Note text"), "client": prop("string", "Client, if the note is about one")], ["text"]),
+            tool("who_touches", "Which agents recently changed a file and whether it is reserved.", ["path": prop("string", "File path")], ["path"], readOnly: true),
+            tool("reserve_files", "Reserve files, folders or globs (src/auth/, *.sql, src/**/*.ts) before editing. While the reservation is active, other agents can't edit or commit them. Calling again extends the reservation.",
+                 ["paths": ["type": "array", "items": ["type": "string"], "description": "Paths relative to the repository root, folders or globs"],
+                  "minutes": prop("integer", "For how many minutes (default from settings, usually 30)"),
+                  "exclusive": prop("boolean", "true (default) — only you; false — shared reservation, just a warning"),
+                  "reason": prop("string", "Why, briefly — other agents and the human will see it")], ["paths"]),
+            tool("release_files", "Release your reservations. Without paths — all of them.",
+                 ["paths": ["type": "array", "items": ["type": "string"], "description": "Which reservations to release"]]),
+            tool("register_agent", "Register on the board (for clients without hooks, e.g. Codex). Returns an agent_id.",
+                 ["cwd": prop("string", "Absolute path of the current working directory"),
+                  "tool": prop("string", "codex, cursor, …"), "name": prop("string", "Preferred name")], ["cwd"]),
         ]
     }
 
@@ -130,26 +130,26 @@ extension Core {
         if name == "register_agent" {
             let cwd = args.s("cwd")
             guard let p = projectFor(cwd: cwd) ?? project else {
-                return ("Папка \(cwd) не относится ни к одному проекту AgentBoard. Человек должен добавить проект в приложении.", true)
+                return ("Folder \(cwd) doesn't belong to any AgentBoard project. The human needs to add the project in the app.", true)
             }
             let tool = args.str("tool") ?? "codex"
             // Codex sessions are already followed from their logs: reuse that agent instead of creating a twin.
             if let existing = agents(project: p.id).first(where: {
                 $0.tool == tool && $0.status != "ended" && now() - $0.lastSeen < 600 && ($0.cwd == cwd || cwd.hasPrefix($0.cwd + "/"))
             }) {
-                return ("Твой agent_id: \(existing.id) (имя «\(existing.name)»). Передавай его во все вызовы agentboard.\n\n"
+                return ("Your agent_id: \(existing.id) (name \"\(existing.name)\"). Pass it in every agentboard call.\n\n"
                         + boardText(project: p, me: existing, includeRules: true), false)
             }
             let a = touchAgent(tool: tool, sessionId: "mcp-" + UUID().uuidString, project: p, cwd: cwd.isEmpty ? p.path : cwd,
                                transcript: nil, revive: true, name: args.str("name"))
-            setAgent(a.id, ["status": "working", "last_action": "зарегистрировался"])
-            addEvent(project: p.id, agent: a.id, kind: "session_start", title: "\(a.name) подключился (\(a.toolLabel))", detail: cwd)
-            return ("Твой agent_id: \(a.id) (имя «\(a.name)»). Передавай его во все вызовы agentboard.\n\n"
+            setAgent(a.id, ["status": "working", "last_action": "registered"])
+            addEvent(project: p.id, agent: a.id, kind: "session_start", title: "\(a.name) connected (\(a.toolLabel))", detail: cwd)
+            return ("Your agent_id: \(a.id) (name \"\(a.name)\"). Pass it in every agentboard call.\n\n"
                     + boardText(project: p, me: a, includeRules: true), false)
         }
 
         guard let project else {
-            return ("Не удалось определить проект. Передай agent_id (из register_agent) или project_path.", true)
+            return ("Couldn't determine the project. Pass agent_id (from register_agent) or project_path.", true)
         }
         // Messages for the caller ride along with any tool result (main delivery path for Codex).
         let inbox = me.flatMap { takeInbox(agent: $0.id) }
@@ -165,30 +165,30 @@ extension Core {
             if let key = args.str("agent") {
                 guard let a = findAgent(key, project: project.id) else {
                     let names = agents(project: project.id).prefix(15).map { "\($0.name) [\($0.id)]" }.joined(separator: ", ")
-                    return done("Агент «\(key)» не найден. Известные агенты: \(names.isEmpty ? "нет" : names)", true)
+                    return done("Agent \"\(key)\" not found. Known agents: \(names.isEmpty ? "none" : names)", true)
                 }
                 let limit = Int(args.oi("limit") ?? 30)
                 return done(activityText(a, limit: max(5, min(limit, 150))))
             }
             let list = agents(project: project.id).filter { $0.id != me?.id }.prefix(12)
-            if list.isEmpty { return done("Других агентов в проекте нет.") }
+            if list.isEmpty { return done("There are no other agents in the project.") }
             return done(list.map(describe).joined(separator: "\n")
-                        + "\n\nПодробнее об агенте: agent_activity(agent: \"имя\").")
+                        + "\n\nMore about an agent: agent_activity(agent: \"name\").")
 
         case "list_tasks":
             var items = tasks(project: project.id, includeDone: args.b("include_done"))
             if let st = args.str("status") { items = items.filter { $0.status.rawValue == st } }
             if let c = args.str("client") { items = items.filter { $0.client.localizedCaseInsensitiveContains(c) } }
-            if items.isEmpty { return done("Задач нет.") }
+            if items.isEmpty { return done("No tasks.") }
             return done(items.prefix(60).map { t in
-                let who = t.assignee.flatMap { agent(id: $0)?.name } ?? "свободна"
-                var s = "#\(t.id) [\(t.status.label), \(who)\(t.client.isEmpty ? "" : ", клиент: \(t.client)")] \(t.title)"
+                let who = t.assignee.flatMap { agent(id: $0)?.name } ?? "unassigned"
+                var s = "#\(t.id) [\(t.status.label), \(who)\(t.client.isEmpty ? "" : ", client: \(t.client)")] \(t.title)"
                 if !t.details.isEmpty { s += "\n   " + t.details.oneLine.trunc(300) }
                 return s
             }.joined(separator: "\n"))
 
         case "create_task":
-            guard let title = args.str("title") else { return done("Нужен title", true) }
+            guard let title = args.str("title") else { return done("title is required", true) }
             let claim = args.b("claim") && me != nil
             var status = TaskStatus(rawValue: args.s("status")) ?? .backlog
             if claim && status == .backlog { status = .in_progress }
@@ -196,42 +196,42 @@ extension Core {
                                client: args.str("client") ?? project.client, status: status,
                                assignee: claim ? me?.id : nil, createdBy: me?.id ?? "agent")
             if claim, let me, me.focus.isEmpty { setAgent(me.id, ["focus": title]) }
-            return done("Создана задача #\(t.id) «\(t.title)» (\(t.status.label))\(claim ? ", взята тобой" : "").")
+            return done("Created task #\(t.id) \"\(t.title)\" (\(t.status.label))\(claim ? ", claimed by you" : "").")
 
         case "claim_task":
-            guard let me else { return done("Не знаю, кто ты. Передай agent_id (register_agent).", true) }
+            guard let me else { return done("I don't know who you are. Pass agent_id (register_agent).", true) }
             guard let tid = args.oi("task_id"), let t = task(id: tid), t.projectId == project.id else {
-                return done("Задача не найдена", true)
+                return done("Task not found", true)
             }
             if let owner = t.assignee, owner != me.id, let oa = agent(id: owner),
                oa.isActive(staleMinutes: AppSettings.staleMinutes), !args.b("force") {
-                return done("Задачу #\(tid) уже делает \(oa.name) (активен). Выбери другую задачу или договорись через send_message.", true)
+                return done("Task #\(tid) is already being done by \(oa.name) (active). Pick another task or coordinate via send_message.", true)
             }
             updateTask(tid, status: t.status == .backlog ? .in_progress : nil, assignee: .some(me.id), by: me.id)
             setAgent(me.id, ["focus": t.title])
-            return done("Задача #\(tid) «\(t.title)» теперь твоя.\(t.details.isEmpty ? "" : "\nОписание: \(t.details)")")
+            return done("Task #\(tid) \"\(t.title)\" is now yours.\(t.details.isEmpty ? "" : "\nDescription: \(t.details)")")
 
         case "update_task":
             guard let tid = args.oi("task_id"), let t = task(id: tid), t.projectId == project.id else {
-                return done("Задача не найдена", true)
+                return done("Task not found", true)
             }
             var status: TaskStatus?
             if let s = args.str("status") {
-                guard let st = TaskStatus(rawValue: s) else { return done("Неизвестный статус \(s)", true) }
+                guard let st = TaskStatus(rawValue: s) else { return done("Unknown status \(s)", true) }
                 status = st
             }
             let assignee: String?? = args.b("release") ? .some(nil) : nil
             updateTask(tid, client: args.str("client"), status: status, assignee: assignee, by: me?.id)
             if let note = args.str("note") {
                 addEvent(project: project.id, agent: me?.id, kind: "note",
-                         title: "#\(tid) «\(t.title.trunc(80))»: \(note.oneLine.trunc(200))", detail: note,
+                         title: "#\(tid) \"\(t.title.trunc(80))\":\(note.oneLine.trunc(200))", detail: note,
                          client: args.str("client") ?? t.client, ref: "\(tid)")
             }
             if let me, status == .done || status == .review, me.focus == t.title { setAgent(me.id, ["focus": ""]) }
-            return done("Задача #\(tid) обновлена.")
+            return done("Task #\(tid) updated.")
 
         case "set_focus":
-            guard let me else { return done("Не знаю, кто ты. Передай agent_id (register_agent).", true) }
+            guard let me else { return done("I don't know who you are. Pass agent_id (register_agent).", true) }
             let focus = args.s("focus")
             setAgent(me.id, ["focus": focus.trunc(500)])
             let files = (args["files"] as? [String]) ?? []
@@ -239,69 +239,69 @@ extension Core {
             for f in files {
                 touchFile(agent: me, path: f)
                 let others = othersTouching(path: f, project: project.id, except: me.id)
-                if !others.isEmpty { warnings.append("\(f) — недавно менял(и) \(others.map { $0.name }.joined(separator: ", "))") }
+                if !others.isEmpty { warnings.append("\(f) — recently changed by \(others.map { $0.name }.joined(separator: ", "))") }
             }
             addEvent(project: project.id, agent: me.id, kind: "focus", title: "\(me.name): \(focus.oneLine.trunc(200))",
                      detail: files.joined(separator: "\n"))
-            return done("Фокус записан." + (warnings.isEmpty ? "" : "\nВнимание, возможны пересечения:\n" + warnings.joined(separator: "\n")))
+            return done("Focus recorded." + (warnings.isEmpty ? "" : "\nHeads up, possible overlaps:\n" + warnings.joined(separator: "\n")))
 
         case "send_message":
-            guard let text = args.str("text") else { return done("Нужен text", true) }
+            guard let text = args.str("text") else { return done("text is required", true) }
             let to = args.s("to")
             if to.isEmpty || ["all", "все", "всем", "*"].contains(to.lowercased()) {
                 let n = sendMessage(project: project.id, to: nil, from: me, text: text)
-                return done(n == 0 ? "Других активных агентов нет — сообщение записано в ленту." : "Отправлено \(n) агент(ам).")
+                return done(n == 0 ? "No other active agents — the message was recorded in the feed." : "Sent to \(n) agent(s).")
             }
-            guard let target = findAgent(to, project: project.id) else { return done("Агент «\(to)» не найден", true) }
+            guard let target = findAgent(to, project: project.id) else { return done("Agent \"\(to)\" not found", true) }
             sendMessage(project: project.id, to: target.id, from: me, text: text)
             let st = target.displayStatus(staleMinutes: AppSettings.staleMinutes)
-            let hint = st == .working ? "получит его при следующем действии"
-                : "сейчас \(st.label); получит, когда человек снова напишет ему или он вызовет agentboard"
-            return done("Сообщение для \(target.name) поставлено в очередь — \(hint).")
+            let hint = st == .working ? "it will get it on its next action"
+                : "currently \(st.label); it will get it when the human writes to it again or it calls agentboard"
+            return done("Message for \(target.name) queued — \(hint).")
 
         case "post_note":
-            guard let text = args.str("text") else { return done("Нужен text", true) }
+            guard let text = args.str("text") else { return done("text is required", true) }
             addEvent(project: project.id, agent: me?.id, kind: "note",
-                     title: "\(me?.name ?? "Агент"): \(text.oneLine.trunc(200))", detail: text, client: args.s("client"))
-            return done("Заметка добавлена в ленту.")
+                     title: "\(me?.name ?? "Agent"): \(text.oneLine.trunc(200))", detail: text, client: args.s("client"))
+            return done("Note added to the feed.")
 
         case "reserve_files":
-            guard let me else { return done("Не знаю, кто ты. Передай agent_id (register_agent).", true) }
+            guard let me else { return done("I don't know who you are. Pass agent_id (register_agent).", true) }
             let paths = (args["paths"] as? [String]) ?? args.str("paths").map { [$0] } ?? []
-            guard !paths.isEmpty else { return done("Нужен paths", true) }
+            guard !paths.isEmpty else { return done("paths is required", true) }
             let minutes = Double(args.oi("minutes") ?? Int64(AppSettings.reservationMinutes))
             let r = reserve(agent: me, patterns: paths, minutes: max(1, min(minutes, 480)),
                             exclusive: args["exclusive"] as? Bool ?? true, reason: args.s("reason"))
             var lines: [String] = []
-            if !r.granted.isEmpty { lines.append("Забронировано до \(Fmt.time(now() + minutes * 60)): \(r.granted.joined(separator: ", "))") }
+            if !r.granted.isEmpty { lines.append("Reserved until \(Fmt.time(now() + minutes * 60)): \(r.granted.joined(separator: ", "))") }
             for (pat, res) in r.blocked {
-                lines.append("Не удалось: \(pat) — уже у \(agent(id: res.agentId)?.name ?? res.agentId) до \(Fmt.time(res.expiresAt))\(res.reason.isEmpty ? "" : " («\(res.reason)»)"). Договорись через send_message.")
+                lines.append("Failed: \(pat) — already held by \(agent(id: res.agentId)?.name ?? res.agentId) until \(Fmt.time(res.expiresAt))\(res.reason.isEmpty ? "" : " (\"\(res.reason)\")"). Coordinate via send_message.")
             }
             return done(lines.joined(separator: "\n"), r.granted.isEmpty)
 
         case "release_files":
-            guard let me else { return done("Не знаю, кто ты. Передай agent_id (register_agent).", true) }
+            guard let me else { return done("I don't know who you are. Pass agent_id (register_agent).", true) }
             let p = project
             let paths = (args["paths"] as? [String])?.map { Self.normalizePattern($0, agent: me, project: p) }
             let n = releaseReservations(agentId: me.id, patterns: paths)
-            if n > 0 { addEvent(project: project.id, agent: me.id, kind: "reservation", title: "\(me.name) снял брони (\(n))") }
-            return done(n == 0 ? "Активных броней не найдено." : "Снято броней: \(n).")
+            if n > 0 { addEvent(project: project.id, agent: me.id, kind: "reservation", title: "\(me.name) released reservations (\(n))") }
+            return done(n == 0 ? "No active reservations found." : "Reservations released: \(n).")
 
         case "who_touches":
             let path = args.s("path")
             let rel = me.map { relativePath(path, agent: $0, project: project) } ?? path
             let held = activeReservations(project: project.id).filter { Self.patternsOverlap($0.pattern, rel) }
-            let heldText = held.map { "🔒 забронирован: \(agent(id: $0.agentId)?.name ?? $0.agentId) до \(Fmt.time($0.expiresAt))\($0.reason.isEmpty ? "" : " («\($0.reason)»)")" }
+            let heldText = held.map { "🔒 reserved: \(agent(id: $0.agentId)?.name ?? $0.agentId) until \(Fmt.time($0.expiresAt))\($0.reason.isEmpty ? "" : " (\"\($0.reason)\")")" }
             let rows = db.query("SELECT * FROM file_touches WHERE project_id=? AND (path=? OR path LIKE ?) ORDER BY last_at DESC LIMIT 10",
                                 [project.id, rel, "%" + rel]).map(FileTouch.init)
-            if rows.isEmpty { return done((heldText + ["Никто из агентов не трогал \(rel) за последнее время."]).joined(separator: "\n")) }
+            if rows.isEmpty { return done((heldText + ["No agent has touched \(rel) recently."]).joined(separator: "\n")) }
             return done((heldText + rows.map { f in
                 let a = agent(id: f.agentId)
                 return "- \(a?.name ?? f.agentId) (\(a?.displayStatus(staleMinutes: AppSettings.staleMinutes).label ?? "?")): \(f.path), ×\(f.count), \(Fmt.rel(f.lastAt))"
             }).joined(separator: "\n"))
 
         default:
-            return done("Неизвестный инструмент \(name)", true)
+            return done("Unknown tool \(name)", true)
         }
     }
 }

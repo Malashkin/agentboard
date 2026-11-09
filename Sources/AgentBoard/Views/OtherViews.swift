@@ -11,29 +11,29 @@ struct SummariesView: View {
     var body: some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 10) {
-                DatePicker("День", selection: $day, in: ...Date(), displayedComponents: .date)
+                DatePicker("Day", selection: $day, in: ...Date(), displayedComponents: .date)
                 let key = Fmt.dayKey.string(from: day)
                 Button {
                     store.generateSummary(day: day)
                 } label: {
                     HStack {
                         if store.generatingDays.contains(key) { ProgressView().controlSize(.small) }
-                        Text(store.generatingDays.contains(key) ? "Claude пишет сводку…" : "Сгенерировать сводку")
+                        Text(store.generatingDays.contains(key) ? "Claude is writing the summary…" : "Generate summary")
                     }.frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(store.generatingDays.contains(key))
-                Text(AppSettings.autoSummary ? "Автоматически каждый день в \(String(format: "%02d:%02d", AppSettings.summaryHour, AppSettings.summaryMinute))" : "Автосводка выключена")
+                Text(AppSettings.autoSummary ? "Automatically every day at \(String(format: "%02d:%02d", AppSettings.summaryHour, AppSettings.summaryMinute))" : "Auto-summary is off")
                     .font(.caption).foregroundStyle(.secondary)
                 List(selection: $selected) {
                     ForEach(store.summaries) { s in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(s.day).font(.headline)
-                            Text("\(Fmt.time(s.createdAt)) · \(s.source == "claude" ? "Claude" : s.source == "raw" ? "только факты" : "пусто")")
+                            Text("\(Fmt.time(s.createdAt)) · \(s.source == "claude" ? "Claude" : s.source == "raw" ? "facts only" : "empty")")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .tag(s.id)
-                        .contextMenu { Button("Удалить", role: .destructive) { store.deleteSummary(s.id) } }
+                        .contextMenu { Button("Delete", role: .destructive) { store.deleteSummary(s.id) } }
                     }
                 }
                 .listStyle(.inset)
@@ -45,13 +45,13 @@ struct SummariesView: View {
                 if let s = store.summaries.first(where: { $0.id == selected }) ?? (selected == nil ? store.summaries.first : nil) {
                     VStack(spacing: 0) {
                         HStack {
-                            Text("Сводка за \(s.day)").font(.headline)
+                            Text("Summary for \(s.day)").font(.headline)
                             Spacer()
-                            Button { copyToPasteboard(s.markdown) } label: { Label("Копировать", systemImage: "doc.on.doc") }
+                            Button { copyToPasteboard(s.markdown) } label: { Label("Copy", systemImage: "doc.on.doc") }
                             Button {
                                 let path = SummaryService.export(s) ?? SummaryService.exportPath(s)
                                 revealInFinder(path)
-                            } label: { Label("Показать файл", systemImage: "folder") }
+                            } label: { Label("Show file", systemImage: "folder") }
                         }
                         .padding(12)
                         Divider()
@@ -60,8 +60,8 @@ struct SummariesView: View {
                 } else {
                     VStack(spacing: 10) {
                         Image(systemName: "doc.richtext").font(.system(size: 40)).foregroundStyle(.secondary)
-                        Text("Сводок пока нет").font(.headline)
-                        Text("Выберите день и нажмите «Сгенерировать сводку». Нужен установленный Claude Code (claude -p).")
+                        Text("No summaries yet").font(.headline)
+                        Text("Pick a day and click “Generate summary”. Requires Claude Code (claude -p) to be installed.")
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -86,20 +86,20 @@ struct IntegrationsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Подключения").font(.largeTitle.bold())
-                Text("AgentBoard связан с агентами в обе стороны: хуки сообщают панели, что делает каждый терминал, и доставляют агентам ваши сообщения; MCP-сервер даёт агентам видеть доску, друг друга и договариваться.")
+                Text("Integrations").font(.largeTitle.bold())
+                Text("AgentBoard talks to your agents both ways: hooks tell the dashboard what each terminal is doing and deliver your messages to agents; the MCP server lets agents see the board and each other, and coordinate.")
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
                 IntegrationRow(
-                    title: "Claude Code — хуки",
-                    detail: "Глобально в ~/.claude/settings.json (с резервной копией). Срабатывают только в проектах, добавленных в AgentBoard. Дают: статус каждого терминала в реальном времени, перехват git commit, предупреждения о конфликтах файлов, доставку сообщений агенту, правила совместной работы в начале сессии.",
+                    title: "Claude Code hooks",
+                    detail: "Installed globally in ~/.claude/settings.json (with a backup). Active only in projects added to AgentBoard. Provides live status for every terminal, git commit interception, file conflict warnings, message delivery to agents, and collaboration rules at session start.",
                     installed: hooks, busy: busy,
                     install: { run { try Integrations.installClaudeHooks() } },
                     uninstall: { run { try Integrations.uninstallClaudeHooks() } })
 
                 IntegrationRow(
-                    title: "Claude Code — MCP-сервер agentboard",
-                    detail: "claude mcp add --scope user agentboard \(Integrations.mcpURL). Инструменты: board, agent_activity, send_message, claim_task, create_task, update_task, set_focus, post_note, who_touches. Скажите агенту «посмотри, что делает Batman» — он вызовет agent_activity.",
+                    title: "Claude Code agentboard MCP server",
+                    detail: "claude mcp add --scope user agentboard \(Integrations.mcpURL). Tools: board, agent_activity, send_message, claim_task, create_task, update_task, set_focus, post_note, who_touches. Ask an agent to “check what Batman is doing” and it will call agent_activity.",
                     installed: mcp, busy: busy,
                     install: { run { try Integrations.installClaudeMCP() } },
                     uninstall: { run { Integrations.uninstallClaudeMCP() } })
@@ -107,22 +107,22 @@ struct IntegrationsView: View {
                 IntegrationRow(
                     title: "Codex",
                     detail: codexAvailable
-                        ? "Добавляет MCP-сервер agentboard и notify в ~/.codex/config.toml (с резервной копией). Codex видит доску через MCP, панель видит каждый его ход. Добавьте также правила в AGENTS.md в настройках проекта."
-                        : "Codex не найден на этом Mac. Можно подключить заранее — настройка запишется в ~/.codex/config.toml.",
+                        ? "Adds the agentboard MCP server and notify to ~/.codex/config.toml (with a backup). Codex sees the board via MCP, and the dashboard sees every turn it takes. Also add the rules to AGENTS.md in project settings."
+                        : "Codex isn’t installed on this Mac. You can connect it in advance; the config will be written to ~/.codex/config.toml.",
                     installed: codex, busy: busy,
                     install: { run { try Integrations.installCodex() } },
                     uninstall: nil)
 
                 Card {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Технические детали").font(.headline)
-                        LabeledContent("Сервер") {
-                            Text(store.serverRunning ? "работает · http://127.0.0.1:\(AppSettings.port)" : "не запущен")
+                        Text("Technical details").font(.headline)
+                        LabeledContent("Server") {
+                            Text(store.serverRunning ? "running · http://127.0.0.1:\(AppSettings.port)" : "not running")
                                 .foregroundStyle(store.serverRunning ? .green : .red)
                         }
-                        LabeledContent("Скрипт-мост") { Text(Integrations.hookPath).textSelection(.enabled) }
-                        LabeledContent("База") { Text(Core.shared.supportDir.path).textSelection(.enabled) }
-                        Text("Если приложение закрыто, хуки молча ничего не делают и агентам не мешают.")
+                        LabeledContent("Bridge script") { Text(Integrations.hookPath).textSelection(.enabled) }
+                        LabeledContent("Database") { Text(Core.shared.supportDir.path).textSelection(.enabled) }
+                        Text("When the app is closed, hooks silently do nothing and don’t get in the agents’ way.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -130,7 +130,7 @@ struct IntegrationsView: View {
             .padding(20)
         }
         .onAppear(perform: refresh)
-        .alert("Подключения", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+        .alert("Integrations", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") {}
         } message: { Text(message ?? "") }
     }
@@ -150,7 +150,7 @@ struct IntegrationsView: View {
             do { try work() } catch { err = error.localizedDescription }
             DispatchQueue.main.async {
                 busy = false
-                message = err ?? "Готово. Уже открытые сессии Claude Code подхватят изменения после перезапуска."
+                message = err ?? "Done. Claude Code sessions that are already open will pick up the changes after a restart."
                 refresh()
             }
         }
@@ -176,9 +176,9 @@ struct IntegrationRow: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing) {
-                    Button(installed ? "Переустановить" : "Подключить") { install() }
+                    Button(installed ? "Reinstall" : "Connect") { install() }
                         .buttonStyle(.borderedProminent).disabled(busy)
-                    if installed, let uninstall { Button("Отключить") { uninstall() }.disabled(busy) }
+                    if installed, let uninstall { Button("Disconnect") { uninstall() }.disabled(busy) }
                 }
             }
         }
@@ -211,92 +211,100 @@ struct SettingsView: View {
     @AppStorage(Pref.terminalApp) private var terminalApp = "Terminal"
     @AppStorage(Pref.worktreeRoot) private var worktreeRoot = NSHomeDirectory() + "/.agentboard/worktrees"
     @AppStorage(Pref.narrator) private var narrator = true
+    @AppStorage(Pref.autoTasks) private var autoTasks = true
+    @AppStorage(Pref.awayDigest) private var awayDigest = true
+    @AppStorage(Pref.awayMinutes) private var awayMinutes = 20.0
     @AppStorage(Pref.narratorMinutes) private var narratorMinutes = 2.0
     @AppStorage(Pref.narratorModel) private var narratorModel = "haiku"
 
     var body: some View {
         TabView {
             AppearanceSettings()
-                .tabItem { Label("Оформление", systemImage: "paintpalette") }
+                .tabItem { Label("Appearance", systemImage: "paintpalette") }
 
             Form {
-                Toggle("Запускать при входе в систему", isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
-                Stepper("Агент неактивен после \(Int(staleMinutes)) мин тишины", value: $staleMinutes, in: 5...240, step: 5)
-                TextField("Порт локального сервера", value: $port, format: .number.grouping(.never))
-                Text("После смены порта перезапустите приложение и переподключите MCP в «Подключениях».")
+                Toggle("Launch at login", isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
+                Stepper("Mark agent idle after \(Int(staleMinutes)) min of silence", value: $staleMinutes, in: 5...240, step: 5)
+                TextField("Local server port", value: $port, format: .number.grouping(.never))
+                Text("After changing the port, restart the app and reconnect MCP in Integrations.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            .tabItem { Label("Общие", systemImage: "gearshape") }
+            .tabItem { Label("General", systemImage: "gearshape") }
 
             Form {
-                Picker("Когда агент делает git commit", selection: $commitMode) {
+                Picker("When an agent runs git commit", selection: $commitMode) {
                     ForEach(CommitMode.allCases) { Text($0.label).tag($0.rawValue) }
                 }
                 .pickerStyle(.radioGroup)
-                Stepper("Ждать решения \(Int(approvalTimeout)) с, затем спросить в терминале",
+                Stepper("Wait \(Int(approvalTimeout)) s for a decision, then ask in the terminal",
                         value: $approvalTimeout, in: 30...1800, step: 30)
                     .disabled(commitMode != CommitMode.approve.rawValue)
-                Text("Режим «Спрашивать одобрение» останавливает агента перед коммитом, пока вы не нажмёте «Разрешить» в окне или в меню-баре. После изменения таймаута переустановите хуки.")
+                Text("“Ask for approval” pauses the agent before each commit until you click Allow in the window or the menu bar. Reinstall the hooks after changing the timeout.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            .tabItem { Label("Коммиты", systemImage: "checkmark.seal") }
+            .tabItem { Label("Commits", systemImage: "checkmark.seal") }
 
             Form {
-                Toggle("Сообщать агенту, что делают другие (при каждом новом запросе, если что-то изменилось)", isOn: $injectContext)
-                Toggle("Предупреждать агента о правке чужих файлов", isOn: $conflictWarnings)
-                Section("Описание работы человеческим языком") {
-                    Toggle("Писать на карточке, что сейчас делает агент", isOn: $narrator)
-                    Stepper("Обновлять не чаще раза в \(narratorMinutes < 1 ? "30 с" : "\(Int(narratorMinutes)) мин")",
+                Toggle("Tell agents what others are doing (on each new prompt, if anything changed)", isOn: $injectContext)
+                Toggle("Warn agents when they edit files another agent is working on", isOn: $conflictWarnings)
+                Section("Plain-language activity") {
+                    Toggle("Show what the agent is doing on its card", isOn: $narrator)
+                    Stepper("Update at most every \(narratorMinutes < 1 ? "30 s" : "\(Int(narratorMinutes)) min")",
                             value: $narratorMinutes, in: 0.5...10, step: 0.5).disabled(!narrator)
-                    TextField("Модель", text: $narratorModel).disabled(!narrator)
-                    Text("Пишет быстрая модель через `claude -p` (без инструментов и без сохранения сессии) — только когда у агента были новые действия; завершение хода и вопросы к вам — сразу. Расходует ваш лимит Claude.")
+                    TextField("Model", text: $narratorModel).disabled(!narrator)
+                    Text("Written by a fast model via `claude -p` (no tools, no saved session), only when the agent has new actions; finished turns and questions for you are shown immediately. Uses your Claude quota.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Брони файлов") {
-                    Toggle("Не давать править файлы, забронированные другим агентом", isOn: $blockReservedEdits)
-                    Stepper("Бронь по умолчанию на \(Int(reservationMinutes)) мин", value: $reservationMinutes, in: 5...240, step: 5)
-                    Text("Коммит агента, задевающий чужую бронь, останавливает git pre-commit хук. Ваши собственные коммиты не блокируются.")
+                Section("Tasks and digest") {
+                    Toggle("Create board tasks from agents' requests automatically", isOn: $autoTasks)
+                    Toggle("Show “While you were away” when you come back", isOn: $awayDigest)
+                    Stepper("…after \(Int(awayMinutes)) min away", value: $awayMinutes, in: 5...240, step: 5).disabled(!awayDigest)
+                }
+                Section("File reservations") {
+                    Toggle("Block edits to files reserved by another agent", isOn: $blockReservedEdits)
+                    Stepper("Default reservation: \(Int(reservationMinutes)) min", value: $reservationMinutes, in: 5...240, step: 5)
+                    Text("An agent’s commit that touches another agent’s reservation is blocked by the git pre-commit hook. Your own commits are never blocked.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Разрешения и вопросы") {
-                    Toggle("Показывать запросы разрешений, вопросы и планы агентов в приложении", isOn: $permissionsInApp)
-                    Text("Ответить можно здесь или, как обычно, в терминале — что раньше. Нужны переустановленные хуки (Подключения).")
+                Section("Permissions and questions") {
+                    Toggle("Show agent permission requests, questions, and plans in the app", isOn: $permissionsInApp)
+                    Text("Answer here or in the terminal as usual, whichever comes first. Requires reinstalled hooks (Integrations).")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Зацикливание") {
-                    Toggle("Замечать, когда агент ходит по кругу", isOn: $stuckDetection)
-                    Toggle("Подсказывать самому агенту остановиться и сменить подход", isOn: $stuckNudge).disabled(!stuckDetection)
-                    Text("Признаки: одна и та же команда падает 3 раза за 20 минут, 8 ошибок подряд или одно и то же действие 5 раз из последних 20.")
+                Section("Stuck detection") {
+                    Toggle("Detect when an agent is going in circles", isOn: $stuckDetection)
+                    Toggle("Nudge the agent to stop and try a different approach", isOn: $stuckNudge).disabled(!stuckDetection)
+                    Text("Signals: the same command fails 3 times in 20 minutes, 8 errors in a row, or the same action 5 times in the last 20.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Запуск задач") {
-                    Picker("Терминал", selection: $terminalApp) {
+                Section("Launching tasks") {
+                    Picker("Terminal", selection: $terminalApp) {
                         Text("Terminal").tag("Terminal")
                         Text("iTerm2").tag("iTerm")
                     }
-                    TextField("Папка для рабочих копий (worktree)", text: $worktreeRoot)
+                    TextField("Worktree folder", text: $worktreeRoot)
                 }
                 Divider()
-                Toggle("Уведомление: коммит", isOn: $notifyCommits)
-                Toggle("Уведомление: агент ждёт вас", isOn: $notifyWaiting)
-                Toggle("Уведомление: конфликт файлов", isOn: $notifyConflicts)
+                Toggle("Notify: commit", isOn: $notifyCommits)
+                Toggle("Notify: agent is waiting on you", isOn: $notifyWaiting)
+                Toggle("Notify: file conflict", isOn: $notifyConflicts)
             }
-            .tabItem { Label("Координация", systemImage: "person.2") }
+            .tabItem { Label("Coordination", systemImage: "person.2") }
 
             Form {
-                Toggle("Делать сводку автоматически", isOn: $autoSummary)
+                Toggle("Generate summary automatically", isOn: $autoSummary)
                 HStack {
-                    Stepper("Время: \(String(format: "%02d:%02d", summaryHour, summaryMinute))", value: $summaryHour, in: 0...23)
+                    Stepper("Time: \(String(format: "%02d:%02d", summaryHour, summaryMinute))", value: $summaryHour, in: 0...23)
                     Picker("", selection: $summaryMinute) {
                         ForEach([0, 15, 30, 45], id: \.self) { Text(String(format: ":%02d", $0)).tag($0) }
                     }.frame(width: 80)
                 }
-                TextField("Папка для .md файлов", text: $exportDir)
-                TextField("Модель для сводки (пусто — по умолчанию)", text: $summaryModel)
-                Text("Сводку пишет Claude Code через `claude -p` по данным дня: коммиты, задачи, клиенты, запросы и ответы агентов.")
+                TextField("Folder for .md files", text: $exportDir)
+                TextField("Summary model (empty for default)", text: $summaryModel)
+                Text("Claude Code writes the summary via `claude -p` from the day’s data: commits, tasks, clients, prompts, and agent replies.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            .tabItem { Label("Сводка", systemImage: "doc.richtext") }
+            .tabItem { Label("Summary", systemImage: "doc.richtext") }
         }
         .formStyle(.grouped)
         .frame(width: 640, height: 520)
@@ -309,41 +317,41 @@ struct AppearanceSettings: View {
 
     var body: some View {
         Form {
-            Section("Цветовая схема") {
+            Section("Color scheme") {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 12)], spacing: 12) {
                     ForEach(ThemePreset.allCases) { p in swatch(p) }
                 }
                 .padding(.vertical, 4)
             }
-            Section("Цвета") {
+            Section("Colors") {
                 HStack {
-                    ColorPicker("Акцентный цвет", selection: theme.accentBinding, supportsOpacity: false)
+                    ColorPicker("Accent color", selection: theme.accentBinding, supportsOpacity: false)
                     if !theme.customAccentHex.isEmpty {
-                        Button("Как в схеме") { ThemeStore.animate { theme.customAccentHex = "" } }
+                        Button("Use scheme color") { ThemeStore.animate { theme.customAccentHex = "" } }
                     }
                 }
-                Picker("Оформление", selection: $theme.appearance) {
+                Picker("Appearance", selection: $theme.appearance) {
                     ForEach(Appearance.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .disabled(theme.preset != .system)
                 if theme.preset != .system {
-                    Text("Светлое/тёмное задаёт выбранная схема. Для выбора вручную возьмите «Системную».")
+                    Text("Light or dark is set by the selected scheme. To choose manually, pick “System”.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Section("Интерфейс") {
-                Picker("Плотность", selection: Binding(get: { theme.density }, set: { v in ThemeStore.animate { theme.density = v } })) {
+            Section("Interface") {
+                Picker("Density", selection: Binding(get: { theme.density }, set: { v in ThemeStore.animate { theme.density = v } })) {
                     ForEach(Density.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Picker("Карточки", selection: Binding(get: { theme.cardStyle }, set: { v in ThemeStore.animate { theme.cardStyle = v } })) {
+                Picker("Cards", selection: Binding(get: { theme.cardStyle }, set: { v in ThemeStore.animate { theme.cardStyle = v } })) {
                     ForEach(CardStyle.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Toggle("Анимации", isOn: $theme.animations)
-                Toggle("Пульсация у работающих агентов", isOn: $theme.pulse).disabled(!theme.animations)
-                Button("Сбросить расположение всех панелей") {
+                Toggle("Animations", isOn: $theme.animations)
+                Toggle("Pulse on active agents", isOn: $theme.pulse).disabled(!theme.animations)
+                Button("Reset all dashboard layouts") {
                     ThemeStore.animate { LayoutStore.shared.resetAll() }
                 }
             }
@@ -422,7 +430,7 @@ struct MenuBarView: View {
             }
             let active = store.activeAgents()
             if active.isEmpty {
-                Text("Активных агентов нет").foregroundStyle(.secondary)
+                Text("No active agents").foregroundStyle(.secondary)
             } else {
                 ForEach(active.prefix(12)) { a in
                     let st = store.status(a)
@@ -440,14 +448,14 @@ struct MenuBarView: View {
             }
             Divider()
             HStack {
-                Button("Открыть панель") {
+                Button("Open dashboard") {
                     openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
                 }
-                Button("Сводка за сегодня") { store.generateSummary(day: Date()) }
+                Button("Today’s summary") { store.generateSummary(day: Date()) }
                     .disabled(store.generatingDays.contains(Fmt.dayKey.string(from: Date())))
                 Spacer()
-                Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help("Выйти")
+                Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }.help("Quit")
             }
         }
         .padding(14)

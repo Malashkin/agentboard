@@ -6,14 +6,14 @@ enum ThemePreset: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .system: return "Системная"
-        case .midnight: return "Полночь"
-        case .graphite: return "Графит"
-        case .ocean: return "Океан"
-        case .forest: return "Лес"
-        case .sunset: return "Закат"
-        case .paper: return "Бумага"
-        case .mint: return "Мята"
+        case .system: return "System"
+        case .midnight: return "Midnight"
+        case .graphite: return "Graphite"
+        case .ocean: return "Ocean"
+        case .forest: return "Forest"
+        case .sunset: return "Sunset"
+        case .paper: return "Paper"
+        case .mint: return "Mint"
         }
     }
     /// background, surface, border, accent (hex), dark?
@@ -34,13 +34,13 @@ enum ThemePreset: String, CaseIterable, Identifiable {
 enum Appearance: String, CaseIterable, Identifiable {
     case system, light, dark
     var id: String { rawValue }
-    var label: String { ["system": "Как в системе", "light": "Светлое", "dark": "Тёмное"][rawValue]! }
+    var label: String { ["system": "Match system", "light": "Light", "dark": "Dark"][rawValue]! }
 }
 
 enum Density: String, CaseIterable, Identifiable {
     case compact, regular, spacious
     var id: String { rawValue }
-    var label: String { ["compact": "Компактно", "regular": "Обычно", "spacious": "Просторно"][rawValue]! }
+    var label: String { ["compact": "Compact", "regular": "Regular", "spacious": "Spacious"][rawValue]! }
     var padding: CGFloat { self == .compact ? 8 : self == .regular ? 12 : 16 }
     var spacing: CGFloat { self == .compact ? 8 : self == .regular ? 12 : 18 }
     var radius: CGFloat { self == .compact ? 8 : self == .regular ? 11 : 14 }
@@ -49,7 +49,7 @@ enum Density: String, CaseIterable, Identifiable {
 enum CardStyle: String, CaseIterable, Identifiable {
     case filled, outlined, glass
     var id: String { rawValue }
-    var label: String { ["filled": "Заливка", "outlined": "Контур", "glass": "Стекло"][rawValue]! }
+    var label: String { ["filled": "Filled", "outlined": "Outlined", "glass": "Glass"][rawValue]! }
 }
 
 /// Look & feel, persisted in UserDefaults. Views observe `ThemeStore.shared` directly so every scene gets it.

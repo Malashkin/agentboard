@@ -93,10 +93,11 @@ final class SessionLiveness {
                     // Its process was alive earlier and is gone now. Background `claude -p` runs have no
                     // session file, are never "seen", and so are never ended here.
                     // No process behind this session any more: the terminal was closed.
-                    core.setAgent(a.id, ["status": "ended", "ended_at": t, "last_action": "терминал закрыт"])
+                    core.setAgent(a.id, ["status": "ended", "ended_at": t, "last_action": "terminal closed"])
                     core.releaseReservations(agentId: a.id, patterns: nil)
                     core.dropPendingPermissions(agent: a.id, inputKey: nil)
-                    core.addEvent(project: a.projectId, agent: a.id, kind: "session_end", title: "\(a.name) отключился (терминал закрыт)")
+                    core.onSessionEnd?(a)
+                    core.addEvent(project: a.projectId, agent: a.id, kind: "session_end", title: "\(a.name) disconnected (terminal closed)")
                     changed = true
                 }
             }
