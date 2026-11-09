@@ -11,6 +11,8 @@ final class SessionLiveness {
     static let shared = SessionLiveness()
     private let queue = DispatchQueue(label: "agentboard.liveness")
     private var timer: DispatchSourceTimer?
+    /// Sessions seen with a live process; only those can be declared closed when the process is gone.
+    private var seenAlive = Set<String>()
 
     struct Live { var pid: Int32; var sessionId: String; var cwd: String; var status: String; var updatedAt: Double }
 
@@ -46,21 +48,18 @@ final class SessionLiveness {
     static func isAlive(pid: Int32, procStart: String) -> Bool {
         guard kill(pid, 0) == 0 || errno == EPERM else { return false }
         guard !procStart.isEmpty, let started = startTime(pid: pid) else { return true }
-        // procStart is ctime-style: "Sat Nov  7 20:23:52 2026".
-        var t = time_t(started)
-        var tmv = tm()
-        localtime_r(&t, &tmv)
-        var buf = [Int8](repeating: 0, count: 64)
-        strftime(&buf, buf.count, "%a %b %e %H:%M:%S %Y", &tmv)
-        let s = String(cString: buf)
-        return s == procStart || abs(Self.parseCtime(procStart).map { $0 - started } ?? 0) <= 2
-    }
-
-    private static func parseCtime(_ s: String) -> Double? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "EEE MMM d HH:mm:ss yyyy"
-        return f.date(from: s.split(separator: " ").joined(separator: " "))?.timeIntervalSince1970
+        // procStart is ctime-style ("Sat Nov  7 20:23:52 2026"); Claude Code writes it in UTC,
+        // so accept the process start time rendered in UTC or in local time.
+        let wanted = procStart.split(separator: " ").joined(separator: " ")
+        for utc in [true, false] {
+            var t = time_t(started)
+            var tmv = tm()
+            if utc { gmtime_r(&t, &tmv) } else { localtime_r(&t, &tmv) }
+            var buf = [Int8](repeating: 0, count: 64)
+            strftime(&buf, buf.count, "%a %b %e %H:%M:%S %Y", &tmv)
+            if String(cString: buf).split(separator: " ").joined(separator: " ") == wanted { return true }
+        }
+        return false
     }
 
     private static func startTime(pid: Int32) -> Double? {
@@ -74,6 +73,8 @@ final class SessionLiveness {
 
     private func tick() {
         guard let live = liveSessions() else { return }
+        seenAlive.formUnion(live.keys)
+        let seen = seenAlive
         let core = Core.shared
         core.q.async {
             var changed = false
@@ -88,8 +89,9 @@ final class SessionLiveness {
                         changed = true
                     }
                     core.db.update("agents", id: a.id, f)
-                } else if a.tty.hasPrefix("/dev/tty"), t - a.lastSeen > 60, t - a.startedAt > 60 {
-                    // Only interactive sessions (they have a terminal); background `claude -p` runs have no session file.
+                } else if seen.contains(a.sessionId), t - a.lastSeen > 30 {
+                    // Its process was alive earlier and is gone now. Background `claude -p` runs have no
+                    // session file, are never "seen", and so are never ended here.
                     // No process behind this session any more: the terminal was closed.
                     core.setAgent(a.id, ["status": "ended", "ended_at": t, "last_action": "терминал закрыт"])
                     core.releaseReservations(agentId: a.id, patterns: nil)
