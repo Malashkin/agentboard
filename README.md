@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.png" width="160" alt="AgentBoard"></p>
+<p align="center"><img src="docs/assets/logo.png" width="160" alt="AgentBoard"></p>
 
 # AgentBoard
 
@@ -96,6 +96,11 @@ AgentBoard sits next to your agents and turns all of that into one live board.
 - 8 color schemes, custom accent, light/dark, density, card style, animations.
 - Dashboards built from widgets — stats, decisions, agents, feed, tasks, time, reservations,
   commits, clients, hot files, latest summary — that you drag around, resize and hide.
+
+## Documentation
+
+Full documentation lives in [docs/](docs/AGENTS.md): product, architecture and decisions, local API and MCP,
+configuration, testing, security and the [changelog](docs/CHANGELOG.md).
 
 ## Installation
 
