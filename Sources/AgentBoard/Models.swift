@@ -94,9 +94,12 @@ struct Agent: Identifiable, Hashable {
     var tty: String
     /// Why the agent looks stuck in a loop ("" when fine).
     var stuck: String
+    /// Plain-language "what it's doing now", written by the narrator.
+    var narrative: String
+    var narrativeAt: Double
 
     init(_ r: Row) {
-        tty = r.s("tty"); stuck = r.s("stuck")
+        tty = r.s("tty"); stuck = r.s("stuck"); narrative = r.s("narrative"); narrativeAt = r.d("narrative_at")
         id = r.s("id"); projectId = r.s("project_id"); tool = r.s("tool"); sessionId = r.s("session_id")
         name = r.s("name"); cwd = r.s("cwd"); root = r.s("root"); branch = r.s("branch"); status = r.s("status")
         lastPrompt = r.s("last_prompt"); focus = r.s("focus"); lastAction = r.s("last_action")
@@ -193,7 +196,7 @@ struct EventItem: Identifiable, Hashable {
     }
 
     /// Low-signal events are hidden from the feed by default.
-    var isRoutine: Bool { ["prompt", "turn_done", "session_start", "session_end", "focus", "action", "tool_failed", "subagent", "reservation"].contains(kind) }
+    var isRoutine: Bool { ["prompt", "turn_done", "session_start", "session_end", "focus", "action", "tool_failed", "subagent", "reservation", "narrative"].contains(kind) }
 
     var icon: String {
         switch kind {
@@ -212,6 +215,7 @@ struct EventItem: Identifiable, Hashable {
         case "action": return "terminal"
         case "focus": return "scope"
         case "stuck": return "arrow.triangle.2.circlepath"
+        case "narrative": return "text.quote"
         case "tool_failed": return "xmark.octagon"
         case "subagent": return "person.2.badge.gearshape"
         case "reservation": return "lock.fill"

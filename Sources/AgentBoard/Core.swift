@@ -36,6 +36,23 @@ final class Core {
 
     /// 100 superhero names for agents; the first free one is given to each new session.
     static let heroNames = [
+        "Batman", "Superman", "Wonder Woman", "Flash", "Aquaman", "Cyborg", "Green Lantern", "Green Arrow",
+        "Black Canary", "Martian Manhunter", "Shazam", "Blue Beetle", "Booster Gold", "Zatanna", "Constantine", "Raven",
+        "Starfire", "Beast Boy", "Hawkman", "Hawkgirl", "Atom", "Firestorm", "Supergirl", "Nightwing",
+        "Robin", "Batgirl", "Batwoman", "Catwoman", "Black Lightning", "Steel", "Iron Man", "Captain America",
+        "Thor", "Hulk", "Black Widow", "Hawkeye", "Spider-Man", "Doctor Strange", "Black Panther", "Captain Marvel",
+        "Falcon", "Winter Soldier", "Scarlet Witch", "Vision", "Ant-Man", "Wasp", "Wolverine", "Cyclops",
+        "Storm", "Jean Grey", "Beast", "Nightcrawler", "Colossus", "Rogue", "Gambit", "Psylocke",
+        "Kitty Pryde", "Bishop", "Cable", "Deadpool", "Daredevil", "Punisher", "Luke Cage", "Iron Fist",
+        "Jessica Jones", "Moon Knight", "Ghost Rider", "Blade", "Silver Surfer", "Mister Fantastic", "Invisible Woman", "Human Torch",
+        "Thing", "Nova", "Star-Lord", "Gamora", "Drax", "Rocket", "Groot", "Mantis",
+        "Ms. Marvel", "Shang-Chi", "She-Hulk", "War Machine", "Nick Fury", "Agent Carter", "Quicksilver", "Angel",
+        "Iceman", "Polaris", "Havok", "Banshee", "Magik", "Spider-Woman", "Miles Morales", "Echo",
+        "Kate Bishop", "X-23", "Sentry", "Hercules",
+    ]
+
+    /// The Russian names earlier versions used, in the same order: migrated to English, still understood in lookups.
+    static let legacyHeroNames = [
         "Бэтмен", "Супермен", "Чудо-женщина", "Флэш", "Аквамен", "Киборг", "Зелёный Фонарь", "Зелёная Стрела",
         "Чёрная Канарейка", "Марсианский Охотник", "Шазам", "Синий Жук", "Бустер Голд", "Затанна", "Константин", "Рейвен",
         "Старфайр", "Бист Бой", "Хокмэн", "Хокгёрл", "Атом", "Огненный Шторм", "Супергёрл", "Найтвинг",
@@ -50,6 +67,20 @@ final class Core {
         "Ледяной Человек", "Полярис", "Хавок", "Банши", "Магик", "Женщина-паук", "Майлз Моралес", "Эхо",
         "Кейт Бишоп", "Икс-23", "Сентри", "Геркулес",
     ]
+
+    static func englishName(_ name: String) -> String? {
+        var base = name, suffix = ""
+        if let r = name.range(of: #"-\d+$"#, options: .regularExpression) { base = String(name[..<r.lowerBound]); suffix = String(name[r]) }
+        guard let i = legacyHeroNames.firstIndex(of: base) else { return nil }
+        return heroNames[i] + suffix
+    }
+
+    /// One-time move of agent names from Russian to English.
+    func migrateNamesToEnglish() {
+        for r in db.query("SELECT id, name FROM agents") {
+            if let en = Self.englishName(r.s("name")) { db.update("agents", id: r.s("id"), ["name": en]) }
+        }
+    }
 
     init() {
         if let dir = ProcessInfo.processInfo.environment["AGENTBOARD_DATA_DIR"], !dir.isEmpty {
@@ -98,6 +129,7 @@ final class Core {
         """)
         let cols = Set(db.query("PRAGMA table_info(agents)").map { $0.s("name") })
         HistoryImporter.ensureSchema(self)
+        defer { migrateNamesToEnglish(); dedupeOpenNames() }
         db.exec("""
         CREATE TABLE IF NOT EXISTS reservations(
           id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, agent_id TEXT, pattern TEXT, exclusive INTEGER DEFAULT 1,
@@ -112,6 +144,9 @@ final class Core {
             if !have.contains(col) { db.exec("ALTER TABLE \(table) ADD COLUMN \(col) \(def)") }
         }
         addColumn("agents", "stuck", "TEXT DEFAULT ''")
+        addColumn("agents", "narrative", "TEXT DEFAULT ''")
+        addColumn("agents", "narrative_at", "REAL DEFAULT 0")
+        addColumn("agents", "narrative_event", "INTEGER DEFAULT 0")
         addColumn("events", "sub", "TEXT DEFAULT ''")
         addColumn("tasks", "worktree", "TEXT DEFAULT ''")
         addColumn("tasks", "branch", "TEXT DEFAULT ''")
@@ -278,8 +313,9 @@ final class Core {
         agents(project: project).filter { $0.isActive(staleMinutes: AppSettings.staleMinutes) }
     }
 
+    /// Names are unique across all open sessions (every terminal gets its own hero), not just per project.
     private func pickName(project: String) -> String {
-        let used = Set(agents(project: project).filter { $0.status != "ended" }.map(\.name))
+        let used = Set(db.query("SELECT name FROM agents WHERE status != 'ended'").map { $0.s("name") })
         if let n = Self.heroNames.first(where: { !used.contains($0) }) { return n }
         var i = 2
         while true {
@@ -323,6 +359,20 @@ final class Core {
                   top.ok ? top.line : cwd, branch.ok ? branch.line : "", "idle", t, t, t, transcript ?? ""])
         claimLaunchedTask(agent(id: id)!)
         return agent(id: id)!
+    }
+
+    /// Two open sessions with the same name (older versions picked names per project): rename the newer one.
+    func dedupeOpenNames() {
+        var seen = Set<String>()
+        for a in db.query("SELECT * FROM agents WHERE status != 'ended' ORDER BY started_at").map(Agent.init) {
+            if !seen.contains(a.name) { seen.insert(a.name); continue }
+            let name = pickName(project: a.projectId)
+            db.update("agents", id: a.id, ["name": name])
+            seen.insert(name)
+            addEvent(project: a.projectId, agent: a.id, kind: "note", title: "\(a.name) (\(a.id)) теперь \(name) — имя было занято другой сессией")
+            sendMessage(project: a.projectId, to: a.id, from: nil,
+                        text: "Тебя переименовали: теперь ты «\(name)» (имя «\(a.name)» уже у другого агента). Твой agent_id не изменился: \(a.id).")
+        }
     }
 
     func setAgent(_ id: String, _ f: [String: Any]) {
@@ -403,7 +453,8 @@ final class Core {
         guard !k.isEmpty else { return nil }
         if let a = agent(id: k) { return a }
         // SQLite NOCASE only folds ASCII, so compare Cyrillic names in Swift.
-        let needle = k.lowercased().replacingOccurrences(of: "ё", with: "е")
+        let needle = (Self.englishName(k) ?? Self.legacyHeroNames.first { $0.lowercased().replacingOccurrences(of: "ё", with: "е") == k.lowercased().replacingOccurrences(of: "ё", with: "е") }.flatMap(Self.englishName) ?? k)
+            .lowercased().replacingOccurrences(of: "ё", with: "е")
         let rows = db.query("SELECT * FROM agents ORDER BY last_seen DESC LIMIT 2000").map(Agent.init).filter {
             $0.name.lowercased().replacingOccurrences(of: "ё", with: "е") == needle
         }
@@ -444,6 +495,7 @@ final class Core {
         let st = a.displayStatus(staleMinutes: AppSettings.staleMinutes)
         out.append("Агент \(a.name) [\(a.id)], \(a.toolLabel). Статус: \(st.label), последняя активность \(Fmt.rel(a.lastSeen)).")
         out.append("Рабочая папка: \(a.cwd)" + (a.branch.isEmpty ? "" : ", ветка \(a.branch)"))
+        if !a.narrative.isEmpty { out.append("Коротко, что делает (\(Fmt.rel(a.narrativeAt))): \(a.narrative)") }
         if !a.focus.isEmpty { out.append("Фокус: \(a.focus)") }
         if let t = db.query("SELECT * FROM tasks WHERE assignee=? AND status != 'done' ORDER BY updated_at DESC LIMIT 3", [a.id]).first.map(TaskItem.init) {
             out.append("Задача: #\(t.id) «\(t.title)» (\(t.status.label))\(t.details.isEmpty ? "" : " — \(t.details.trunc(400))")")
@@ -549,6 +601,7 @@ final class Core {
                             [a.id]).first.map(TaskItem.init) {
             parts.append("задача #\(t.id) «\(t.title.trunc(80))»")
         }
+        if !a.narrative.isEmpty { parts.append("сейчас: \(a.narrative.oneLine.trunc(220))") }
         if !a.focus.isEmpty { parts.append("фокус: \(a.focus.oneLine.trunc(160))") }
         else if !a.lastPrompt.isEmpty { parts.append("запрос: «\(a.lastPrompt.oneLine.trunc(140))»") }
         let files = recentFiles(agent: a.id, limit: 6)
@@ -601,7 +654,7 @@ final class Core {
                Закончил с файлами — release_files(). Брони снимаются сами по истечении срока и при закрытии сессии.
             4) Закончил — update_task(task_id, status="review" или "done", note="что сделано").
             5) Если работа для клиента — указывай client. Человек видит всё это на панели AgentBoard.
-            6) Если человек просит посмотреть, что делает другой агент / соседний терминал / «Вега» и т.п. —
+            6) Если человек просит посмотреть, что делает другой агент / соседний терминал / «Batman» и т.п. —
                вызови agent_activity(agent) (имя или agent_id; без аргумента — обзор всех). Это реальные данные с панели.
             7) Чтобы что-то сообщить другому агенту — send_message(to, text); to="all" — всем. Сообщения тебе
                приходят автоматически в контекст с пометкой [AgentBoard].

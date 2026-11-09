@@ -36,6 +36,9 @@ enum Pref {
     static let stuckNudge = "stuckNudge"
     static let terminalApp = "terminalApp"
     static let worktreeRoot = "worktreeRoot"
+    static let narrator = "narrator"
+    static let narratorMinutes = "narratorMinutes"
+    static let narratorModel = "narratorModel"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -61,6 +64,9 @@ enum Pref {
             stuckNudge: true,
             terminalApp: "Terminal",
             worktreeRoot: NSHomeDirectory() + "/.agentboard/worktrees",
+            narrator: true,
+            narratorMinutes: 2.0,
+            narratorModel: "haiku",
         ])
     }
 }
@@ -88,6 +94,9 @@ enum AppSettings {
     static var stuckDetection: Bool { d.bool(forKey: Pref.stuckDetection) }
     static var stuckNudge: Bool { d.bool(forKey: Pref.stuckNudge) }
     static var terminalApp: String { d.string(forKey: Pref.terminalApp) ?? "Terminal" }
+    static var narrator: Bool { d.bool(forKey: Pref.narrator) }
+    static var narratorMinutes: Double { max(0.5, d.double(forKey: Pref.narratorMinutes)) }
+    static var narratorModel: String { (d.string(forKey: Pref.narratorModel) ?? "").trimmed.isEmpty ? "haiku" : d.string(forKey: Pref.narratorModel)!.trimmed }
     static var worktreeRoot: String {
         let v = d.string(forKey: Pref.worktreeRoot) ?? ""
         return v.isEmpty ? NSHomeDirectory() + "/.agentboard/worktrees" : (v as NSString).expandingTildeInPath

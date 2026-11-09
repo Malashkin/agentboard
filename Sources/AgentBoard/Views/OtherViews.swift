@@ -99,7 +99,7 @@ struct IntegrationsView: View {
 
                 IntegrationRow(
                     title: "Claude Code — MCP-сервер agentboard",
-                    detail: "claude mcp add --scope user agentboard \(Integrations.mcpURL). Инструменты: board, agent_activity, send_message, claim_task, create_task, update_task, set_focus, post_note, who_touches. Скажите агенту «посмотри, что делает Вега» — он вызовет agent_activity.",
+                    detail: "claude mcp add --scope user agentboard \(Integrations.mcpURL). Инструменты: board, agent_activity, send_message, claim_task, create_task, update_task, set_focus, post_note, who_touches. Скажите агенту «посмотри, что делает Batman» — он вызовет agent_activity.",
                     installed: mcp, busy: busy,
                     install: { run { try Integrations.installClaudeMCP() } },
                     uninstall: { run { Integrations.uninstallClaudeMCP() } })
@@ -210,6 +210,9 @@ struct SettingsView: View {
     @AppStorage(Pref.stuckNudge) private var stuckNudge = true
     @AppStorage(Pref.terminalApp) private var terminalApp = "Terminal"
     @AppStorage(Pref.worktreeRoot) private var worktreeRoot = NSHomeDirectory() + "/.agentboard/worktrees"
+    @AppStorage(Pref.narrator) private var narrator = true
+    @AppStorage(Pref.narratorMinutes) private var narratorMinutes = 2.0
+    @AppStorage(Pref.narratorModel) private var narratorModel = "haiku"
 
     var body: some View {
         TabView {
@@ -241,6 +244,14 @@ struct SettingsView: View {
             Form {
                 Toggle("Сообщать агенту, что делают другие (при каждом новом запросе, если что-то изменилось)", isOn: $injectContext)
                 Toggle("Предупреждать агента о правке чужих файлов", isOn: $conflictWarnings)
+                Section("Описание работы человеческим языком") {
+                    Toggle("Писать на карточке, что сейчас делает агент", isOn: $narrator)
+                    Stepper("Обновлять не чаще раза в \(narratorMinutes < 1 ? "30 с" : "\(Int(narratorMinutes)) мин")",
+                            value: $narratorMinutes, in: 0.5...10, step: 0.5).disabled(!narrator)
+                    TextField("Модель", text: $narratorModel).disabled(!narrator)
+                    Text("Пишет быстрая модель через `claude -p` (без инструментов и без сохранения сессии) — только когда у агента были новые действия; завершение хода и вопросы к вам — сразу. Расходует ваш лимит Claude.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Брони файлов") {
                     Toggle("Не давать править файлы, забронированные другим агентом", isOn: $blockReservedEdits)
                     Stepper("Бронь по умолчанию на \(Int(reservationMinutes)) мин", value: $reservationMinutes, in: 5...240, step: 5)
@@ -419,7 +430,8 @@ struct MenuBarView: View {
                         Image(systemName: st.icon).foregroundStyle(st.color).frame(width: 16)
                         VStack(alignment: .leading, spacing: 1) {
                             Text("\(a.name) · \(store.project(a.projectId)?.name ?? "")").font(.callout.weight(.medium))
-                            Text(a.lastAction.isEmpty ? st.label : a.lastAction).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(!a.narrative.isEmpty ? a.narrative : a.lastAction.isEmpty ? st.label : a.lastAction)
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         }
                         Spacer()
                         Text(Fmt.rel(a.lastSeen, now: store.now)).font(.caption2).foregroundStyle(.secondary)

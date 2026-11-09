@@ -32,10 +32,18 @@ struct AgentCard: View {
                 if !agent.focus.isEmpty {
                     Label(agent.focus, systemImage: "scope").font(.callout).lineLimit(2)
                 }
+                // What it's doing, in plain words (fixed height so the card never jumps).
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "text.quote").foregroundStyle(Color.accentColor)
+                    Text(agent.narrative.isEmpty ? "Опишу, что он делает, после первых действий…" : agent.narrative)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(agent.narrative.isEmpty ? .secondary : .primary)
+                        .lineLimit(3, reservesSpace: true)
+                        .help(agent.narrative.isEmpty ? "" : "Обновлено \(Fmt.rel(agent.narrativeAt, now: store.now))")
+                }
                 // Fixed height, so a new prompt doesn't resize the card and reflow the grid.
                 Text(agent.lastPrompt.isEmpty ? " " : "«\(agent.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression).oneLine.trimmed)»").font(.callout).foregroundStyle(.secondary)
-                    .lineLimit(3, reservesSpace: true)
-                    .contentTransition(.opacity)
+                    .lineLimit(2, reservesSpace: true)
                 if !agent.stuck.isEmpty && st == .stuck {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.red)
@@ -237,6 +245,14 @@ struct AgentDetailSheet: View {
                     GridRow { Text("Фокус").foregroundStyle(.secondary); Text(a.focus.isEmpty ? "—" : a.focus) }
                 }
                 .font(.callout)
+                if !a.narrative.isEmpty {
+                    GroupBox("Сейчас") {
+                        HStack(alignment: .top) {
+                            Text(a.narrative).font(.callout).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                            Text(Fmt.rel(a.narrativeAt, now: store.now)).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 if !a.lastPrompt.isEmpty {
                     GroupBox("Последний запрос") {
                         ScrollView { Text(a.lastPrompt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }

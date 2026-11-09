@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GitMonitor.shared.start()
         CodexWatcher.shared.start()
         SessionLiveness.shared.start()
+        Narrator.shared.start()
         // Keep each project's git hooks current (pre-commit guard added in newer versions, moved folders).
         DispatchQueue.global(qos: .utility).async {
             for p in core.q.sync(execute: { core.allProjects() }) { try? Integrations.installGitHook(p) }
