@@ -57,7 +57,9 @@ enum SessionDelivery {
             return toInbox()
         case .terminal:
             if let how = typeIntoTerminal(a, text) { log(how); return "Sent to \(a.name)'s terminal (\(how))." }
-            return "Couldn't find \(a.name)'s terminal. Terminal.app, iTerm2 and tmux are supported; Claude Code needs at least one prompt after the hooks are installed. Try \"Into context\" or \"Resume in the background\"."
+            return "Couldn't reach \(a.name)'s terminal. Supported: herdr, tmux, iTerm2, Terminal.app"
+                + (Herdr.isInstalled ? " (herdr is installed but doesn't manage this session)" : "")
+                + "; Claude Code needs at least one prompt after the hooks are installed. Try \"Into context\" or \"Resume in the background\"."
         case .resume:
             return resume(a, text)
         case .auto:
@@ -75,6 +77,15 @@ enum SessionDelivery {
     /// Returns a description of where the text was typed, or nil.
     static func typeIntoTerminal(_ a: Agent, _ text: String) -> String? {
         let line = (prefix + text).oneLine
+
+        // Herdr is asked first: when it manages the session, the agent's terminal is a pty herdr
+        // owns, no tab or pane below will ever match it, and only herdr can reach the input.
+        // Costs nothing to the majority who don't use it — without the binary this returns at once.
+        if let pane = Herdr.pane(sessionId: a.sessionId, tool: a.tool), Herdr.canPrompt(pane),
+           Herdr.prompt(pane: pane.id, text: line) {
+            return "herdr \(pane.id)"
+        }
+
         var tty = a.tty
         if tty.isEmpty || a.tool == "codex" { tty = findTTY(tool: a.tool, cwd: a.cwd) ?? tty }
         guard tty.hasPrefix("/dev/"), Core.isTTYName(String(tty.dropFirst(5))) else { return nil }

@@ -42,7 +42,7 @@ xcrun llvm-cov report /tmp/abcov/debug/AgentBoard -instr-profile=/tmp/abcov/ab.p
 
 ## Not covered (manual)
 
-SwiftUI views, `Store`, notifications and their actions, typing into real terminals (AppleScript/tmux),
+SwiftUI views, `Store`, notifications and their actions, typing into real terminals (herdr/tmux/AppleScript),
 launching agents in Terminal, git status polling, model-generated text itself.
 
 ## Rule

@@ -9,6 +9,9 @@ updated: 2026-11-10
 ## Visibility
 - **Agent cards** — one per Claude Code / Codex session, with a unique superhero name (100 built in),
   status (working · waiting for you · idle · stuck · finished · inactive), project, branch, current task,
+  *"Waiting for you" means the agent cannot continue without an answer — a permission, a question,
+  a plan. An agent that merely finished its turn and sits at its prompt is **idle**, even though
+  Claude Code announces that as "waiting for your input".*
   touched files, last action and a quick reply field.
 - **Plain-language status** — a small model (Haiku via `claude -p`) writes one or two sentences about
   what the agent is doing, refreshed only after new activity (default: at most every 2 minutes per agent).
@@ -25,7 +28,7 @@ updated: 2026-11-10
   questions with the agent's options or a free answer, plans (Approve · Request changes), commits.
   Also in the menu bar and as macOS notifications with action buttons. The terminal prompt stays live.
 - **Reply** on an idle/waiting agent's card or from its notification — typed into its terminal
-  (Terminal.app, iTerm2, tmux); queued into context for a busy agent; background resume for closed sessions.
+  (herdr, tmux, iTerm2, Terminal.app); queued into context for a busy agent; background resume for closed sessions.
 - **While you were away** — a short digest after a break (default 20 minutes).
 
 ## Coordination
