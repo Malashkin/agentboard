@@ -27,7 +27,7 @@ flowchart LR
       UI[SwiftUI: Store → views, menu bar, notifications]
     end
     FS["~/.claude/sessions, ~/.claude/projects,<br/>~/.codex/sessions"]
-    T[Terminal / iTerm2 / tmux]
+    T[herdr / tmux / iTerm2 / Terminal.app]
   end
   LLM[(claude -p — Anthropic)]
 
@@ -42,7 +42,7 @@ flowchart LR
   W --> CORE
   FS --> W
   CORE --> UI
-  UI -- AppleScript / tmux --> T
+  UI -- herdr CLI / tmux / AppleScript --> T
   W -- narratives, titles, digest --> LLM
   CORE -- summary --> LLM
 ```

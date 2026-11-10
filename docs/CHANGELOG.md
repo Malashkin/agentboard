@@ -11,6 +11,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- **Terminal delivery through [herdr](https://herdr.dev).** Herdr starts every agent in a
+  pseudo-terminal it creates itself, so no Terminal.app tab, iTerm2 session or tmux pane owns that
+  terminal — and only the process holding the pty master can put text into the agent's input.
+  Until now a comment to an agent *waiting for input* was silently queued instead and sat there
+  until the human typed in the terminal by hand, which read as "sending from the app doesn't work".
+  Herdr is detected, never configured: with no `herdr` binary nothing is asked and the tmux /
+  iTerm2 / Terminal.app paths behave exactly as before.
+- Sessions are matched to herdr panes **by session id**, which herdr reports as the agent's own
+  (`agent_session.value`). Exact where a working-directory lookup cannot be: eight sessions open on
+  one repository stay distinguishable.
+
+### Fixed
+- "Couldn't find the terminal" now names every supported terminal and says when herdr is installed
+  but doesn't manage that session — the old wording sent people looking for tabs they never had.
+
 ## [Unreleased]
 
 ### Added

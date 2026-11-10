@@ -154,6 +154,48 @@ extension SelfTest {
         check(SessionDelivery.agentInForeground(psOutput: "Ss   -bash\nS+   /usr/local/bin/codex", tool: "codex"), "M3: codex by full path → may type")
         check(!SessionDelivery.agentInForeground(psOutput: "", tool: "claude"), "M3: no processes → don't type")
 
+        section("Herdr: recognising sessions it manages", layer: "unit")
+        // Recorded `herdr agent list` output: two sessions in ONE repository, which is exactly the
+        // case a working-directory lookup cannot tell apart.
+        let herdrList = """
+        {"id":"cli:agent:list","result":{"type":"agent_list","agents":[
+          {"agent":"claude","agent_session":{"agent":"claude","kind":"id","value":"aaaa-1111"},
+           "agent_status":"idle","cwd":"/repo","pane_id":"w1:p1"},
+          {"agent":"claude","agent_session":{"agent":"claude","kind":"id","value":"bbbb-2222"},
+           "agent_status":"working","cwd":"/repo","pane_id":"w4:p2"},
+          {"agent":"codex","agent_session":{"agent":"codex","kind":"id","value":"cccc-3333"},
+           "agent_status":"unknown","cwd":"/other","pane_id":"w9:p1"}
+        ]}}
+        """
+        check(Herdr.parsePane(json: herdrList, sessionId: "aaaa-1111", tool: "claude")
+                == Herdr.Pane(id: "w1:p1", status: "idle"), "the session's own pane is found by session id")
+        check(Herdr.parsePane(json: herdrList, sessionId: "bbbb-2222", tool: "claude")?.id == "w4:p2",
+              "a second session in the same repository is told apart — this is why we match by id, not by cwd")
+        check(Herdr.parsePane(json: herdrList, sessionId: "cccc-3333", tool: "claude") == nil,
+              "a session id belonging to another tool is not ours")
+        check(Herdr.parsePane(json: herdrList, sessionId: "no-such", tool: "claude") == nil,
+              "a session herdr doesn't manage → nothing (fall through to tmux / iTerm2 / Terminal.app)")
+        check(Herdr.parsePane(json: herdrList, sessionId: "", tool: "claude") == nil,
+              "an agent without a session id is never matched by an empty value")
+        check(Herdr.parsePane(json: "not json at all", sessionId: "aaaa-1111", tool: "claude") == nil
+                && Herdr.parsePane(json: "", sessionId: "aaaa-1111", tool: "claude") == nil,
+              "unreadable output doesn't crash and doesn't pretend to have found a pane")
+        check(Herdr.parsePane(json: #"{"error":{"code":"no_server","message":"herdr is not running"}}"#,
+                              sessionId: "aaaa-1111", tool: "claude") == nil,
+              "herdr not running → no pane")
+        check(!Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "unknown")),
+              "a pane where herdr sees no agent is not prompted — the text would land in a bare shell")
+        check(Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "idle"))
+                && Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "done")),
+              "an idle or finished agent still accepts a prompt — that is the case worth waking")
+        // herdr reports refusals in JSON and still exits 0, so the exit status alone would read
+        // every error as success.
+        check(!Herdr.succeeded(json: #"{"error":{"code":"agent_not_found"}}"#, exitCode: 0),
+              "an error with exit code 0 is a failure, not a success")
+        check(Herdr.succeeded(json: #"{"id":"cli:agent:prompt","result":{"ok":true}}"#, exitCode: 0),
+              "a result without an error is a success")
+        check(!Herdr.succeeded(json: "", exitCode: 1), "no output at all → judged by the exit status")
+
         section("Security helpers: token, names, peer text, links (H2, M2, L2)", layer: "unit")
         let tok = Auth.newToken()
         check(Auth.isWellFormed(tok) && tok != Auth.newToken(), "tokens are 32 random bytes in hex, different each time")
@@ -533,6 +575,7 @@ extension SelfTest {
         check(ctx2.contains("also update the docs"), "…and it arrives at the agent's next step")
         let noTerm = SessionDelivery.run(agentId: mx.id, text: "x", mode: .terminal)
         check(!noTerm.lowercased().contains("sent to"), "without a known terminal nothing is typed anywhere", noTerm)
+        check(noTerm.contains("herdr"), "…and the answer names every supported terminal, herdr included", noTerm)
 
         section("Inputs for the model-written texts")
         core.q.sync {

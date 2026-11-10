@@ -7,7 +7,8 @@ updated: 2026-11-10
 # Build and install
 
 ## Requirements
-macOS 14+, Command Line Tools (`xcode-select --install`). Optional: `gh` (pull requests), `tmux`, iTerm2.
+macOS 14+, Command Line Tools (`xcode-select --install`). Optional: `gh` (pull requests), and whatever runs your
+agents' terminals — [herdr](https://herdr.dev), `tmux`, iTerm2 (Terminal.app needs nothing).
 
 ## Build
 
