@@ -164,10 +164,14 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 262 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 317 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated
 ```
 
 Native SwiftUI, Swift Package Manager, no dependencies beyond the system (SQLite, Network.framework).
+
+## License
+
+[MIT](LICENSE) © 2026 Mikhail Malashkin

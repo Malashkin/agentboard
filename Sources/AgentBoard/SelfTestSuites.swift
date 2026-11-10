@@ -938,6 +938,42 @@ extension SelfTest {
         check(!scan().contains { $0.path == repoTop }, "a project removed from the board (history kept) isn't suggested again")
         core.q.sync { core.removeProject(id: p.id) }
 
+        // Load: big transcripts are read only up to the line with the folder.
+        let perf = HistoryImporter.claudeRoot + "/-perf"
+        try? fm.createDirectory(atPath: perf, withIntermediateDirectories: true)
+        let pad = String(decoding: jsonData(["type": "assistant", "text": String(repeating: "x", count: 2000)]), as: UTF8.self) + "\n"
+        func cwdLine(_ c: String) -> String { String(decoding: jsonData(["type": "user", "cwd": c]), as: UTF8.self) + "\n" }
+        try? (#"{"type":"summary"}"# + "\n" + cwdLine(plain) + String(repeating: pad, count: 150))
+            .write(toFile: perf + "/big.jsonl", atomically: true, encoding: .utf8)
+        let longFirst = String(decoding: jsonData(["type": "summary", "text": String(repeating: "y", count: 40_000)]), as: UTF8.self) + "\n"
+        try? (longFirst + cwdLine(repoTop) + pad).write(toFile: perf + "/long.jsonl", atomically: true, encoding: .utf8)
+        try? cwdLine(plain).dropLast().description.write(toFile: perf + "/tiny.jsonl", atomically: true, encoding: .utf8)
+        let b0 = ProjectDiscovery.stats.bytes
+        check(ProjectDiscovery.cwd(of: perf + "/big.jsonl", tool: "claude") == plain, "300 KB transcript: folder found on its first lines")
+        let bigRead = ProjectDiscovery.stats.bytes - b0
+        check(bigRead <= 16 << 10, "…reading only the first 16 KB, not the whole head", "\(bigRead) bytes")
+        check(ProjectDiscovery.cwd(of: perf + "/long.jsonl", tool: "claude") == repoTop, "a 40 KB first line spanning chunks is handled")
+        check(ProjectDiscovery.cwd(of: perf + "/tiny.jsonl", tool: "claude") == plain, "a short file without a final newline is read")
+        let b1 = ProjectDiscovery.stats.bytes
+        _ = ProjectDiscovery.cwd(of: perf + "/big.jsonl", tool: "claude")
+        check(ProjectDiscovery.stats.bytes == b1, "a session file is read once per run (cached)")
+
+        _ = ProjectDiscovery.scan(known: [], ignored: [], excluded: [])
+        let r0 = ProjectDiscovery.stats.resolves
+        _ = ProjectDiscovery.scan(known: [], ignored: [], excluded: [])
+        check(ProjectDiscovery.stats.resolves == r0, "a repeated scan doesn't look folders up again (git calls cached)",
+              "\(ProjectDiscovery.stats.resolves - r0) lookups")
+
+        let cap = ProjectDiscovery.maxSessions
+        ProjectDiscovery.maxSessions = 2
+        for (i, n) in ["big", "long", "tiny"].enumerated() {
+            try? fm.setAttributes([.modificationDate: Date().addingTimeInterval(Double(-i - 1) * 1)], ofItemAtPath: perf + "/\(n).jsonl")
+        }
+        let newest = ProjectDiscovery.sessions(since: 0)
+        check(newest.count == 2, "only the newest sessions are read when there are too many", "\(newest.count)")
+        ProjectDiscovery.maxSessions = cap
+        try? fm.removeItem(atPath: perf)
+
         var reported: [String] = []
         core.q.sync { core.onUnknownFolder = { reported.append($0) } }
         func hook(_ sid: String, _ cwd: String) {
@@ -951,6 +987,83 @@ extension SelfTest {
         core.q.sync { core.onUnknownFolder = nil }
         try? fm.removeItem(atPath: claudeDir)
         try? fm.removeItem(atPath: codexDir + "/rollout-disc.jsonl")
+    }
+}
+
+extension SelfTest {
+    // MARK: - Human message → agent session, every delivery point
+
+    static func deliverySuite(core: Core, project: Project, repo: String) {
+        section("Message to a session: every delivery point")
+        func hook(_ j: JSON, tool: String = "claude") -> Data? {
+            var out: Data?
+            core.q.sync { core.handleClaudeHook(j, agentTool: tool) { out = $0 } }
+            return out
+        }
+        func context(_ d: Data?) -> String {
+            ((d.flatMap { parseJSON($0) as? JSON }?["hookSpecificOutput"] as? JSON)?.s("additionalContext")) ?? ""
+        }
+        func agent(_ sid: String, _ tool: String = "claude") -> Agent? {
+            core.q.sync { core.db.query("SELECT * FROM agents WHERE tool=? AND session_id=?", [tool, sid]).first.map(Agent.init) }
+        }
+        func send(_ a: Agent, _ text: String, _ mode: DeliveryMode) -> String {
+            SessionDelivery.run(agentId: a.id, text: text, mode: mode)
+        }
+        func pending(_ a: Agent) -> Int64 {
+            core.q.sync { core.db.query("SELECT COUNT(*) AS n FROM messages WHERE to_agent=? AND delivered_at IS NULL", [a.id]).first?.i("n") ?? 0 }
+        }
+        let read: JSON = ["hook_event_name": "PostToolUse", "cwd": repo, "tool_name": "Read", "tool_input": ["file_path": repo + "/a.txt"]]
+        func with(_ j: JSON, _ sid: String, _ extra: JSON = [:]) -> JSON { j.merging(["session_id": sid].merging(extra) { $1 }) { $1 } }
+
+        _ = hook(["hook_event_name": "SessionStart", "session_id": "dlv", "cwd": repo, "source": "startup"])
+        guard let a = agent("dlv") else { check(false, "delivery agent starts"); return }
+
+        // Idle (waiting for the next prompt), no terminal found → queued, not lost.
+        let queued = send(a, "check the CI before merging", .auto)
+        check(queued.contains("queued") && pending(a) == 1, "idle agent without a terminal: the comment is queued", queued)
+        let onPrompt = context(hook(with(["hook_event_name": "UserPromptSubmit", "cwd": repo, "prompt": "go on"], "dlv")))
+        check(onPrompt.contains("check the CI before merging"), "…and arrives with its next prompt")
+        check(onPrompt.contains("From the human"), "…marked as coming from the human (an instruction, not peer info)")
+        check(pending(a) == 0, "…and is marked delivered")
+        check(!context(hook(with(read, "dlv"))).contains("check the CI"), "…exactly once")
+
+        // Working → into context at the next step; several messages keep their order.
+        let w1 = send(a, "first: rename the flag", .auto)
+        _ = send(a, "second: then update the docs", .inbox)
+        check(w1.contains("next step"), "working agent: the comment goes into context at its next step", w1)
+        let step = context(hook(with(read, "dlv")))
+        if let i = step.range(of: "first: rename the flag"), let j = step.range(of: "second: then update the docs") {
+            check(i.lowerBound < j.lowerBound, "two comments arrive together, in the order they were sent")
+        } else { check(false, "two comments arrive together, in the order they were sent", step.trunc(200)) }
+
+        // Failed tool call is a delivery point too.
+        _ = send(a, "the failing test is flaky, skip it", .inbox)
+        let failed = context(hook(with(["hook_event_name": "PostToolUseFailure", "cwd": repo, "tool_name": "Bash",
+                                        "tool_input": ["command": "swift test"], "error": "exit 1"], "dlv")))
+        check(failed.contains("the failing test is flaky"), "a comment arrives after a failed tool call as well")
+
+        // Arrived while finishing the turn → the agent isn't allowed to stop before reading it.
+        _ = send(a, "one more thing: add a changelog line", .inbox)
+        let stop = hook(with(["hook_event_name": "Stop", "cwd": repo, "last_assistant_message": "Done."], "dlv")).flatMap { parseJSON($0) as? JSON }
+        check(stop?.s("decision") == "block" && (stop?.s("reason") ?? "").contains("add a changelog line"),
+              "a comment pending at the end of the turn keeps the agent working with it", "\(String(describing: stop))")
+        check(agent("dlv")?.status == "working", "…and the card shows it working again")
+        let stop2 = hook(with(["hook_event_name": "Stop", "cwd": repo, "last_assistant_message": "Added."], "dlv"))
+        check(stop2 == nil, "the next stop is allowed: no endless loop")
+
+        // Codex sessions get comments through the same hooks.
+        _ = hook(["hook_event_name": "SessionStart", "session_id": "dlv-cx", "cwd": repo, "source": "startup"], tool: "codex")
+        if let cx = agent("dlv-cx", "codex") {
+            _ = send(cx, "codex: use the new API", .inbox)
+            check(context(hook(with(read, "dlv-cx"), tool: "codex")).contains("codex: use the new API"), "Codex session: the comment arrives at its next step")
+        } else { check(false, "Codex session registered") }
+
+        // Closed session → queued, with a pointer to background resume.
+        _ = hook(with(["hook_event_name": "SessionEnd", "cwd": repo], "dlv"))
+        let closed = send(a, "after hours", .auto)
+        check(closed.contains("closed") && closed.contains("Resume"), "closed session: queued, and the app suggests background resume", closed)
+        check(SessionDelivery.run(agentId: "no-such-agent", text: "x", mode: .auto) == "Agent not found", "unknown agent → clear error, nothing stored")
+        check(SessionDelivery.prefix == "[Comment from AgentBoard] ", "typed / resumed comments carry a visible prefix")
     }
 }
 

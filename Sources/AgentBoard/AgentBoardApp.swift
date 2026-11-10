@@ -10,6 +10,16 @@ struct AgentBoardApp: App {
         // CLI mode: `AgentBoard --install-claude [--install-codex]` runs the same installers as the "Connections" screen.
         let args = CommandLine.arguments
         if args.contains("--self-test") { exit(SelfTest.run()) }
+        // `AgentBoard --discover`: read-only dry run of the "Suggested" scan (no database, no settings) with timing.
+        if args.contains("--discover") {
+            let t0 = Date()
+            let found = ProjectDiscovery.scan(known: [], ignored: [])
+            print(String(format: "%d suggestions in %.2f s, %d session files read, %.1f MB, %d folder lookups, %d git calls",
+                         found.count, Date().timeIntervalSince(t0), ProjectDiscovery.stats.files,
+                         Double(ProjectDiscovery.stats.bytes) / 1_048_576, ProjectDiscovery.stats.resolves, ProjectDiscovery.stats.gitCalls))
+            for c in found.prefix(20) { print("  \(c.path)  (\(c.sessions) sessions, \(c.toolsLabel))") }
+            exit(0)
+        }
         if args.contains("--install-claude") || args.contains("--install-codex") || args.contains("--uninstall-claude") {
             Pref.registerDefaults()
             Integrations.writeBridge()

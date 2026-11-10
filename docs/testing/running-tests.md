@@ -15,6 +15,13 @@ Output is one line per check (`✓` / `✗ name — detail`) grouped by layer (`
 `[integration]`), a per-layer summary and `N passed, M failed`; the exit code is the number of failures.
 Temporary files are removed at the end. The run is deterministic and takes about 15 seconds.
 
+## Suggested-projects scan
+
+```sh
+.build/release/AgentBoard --discover   # read-only: suggestions, time, bytes read, git calls
+CLAUDE_CONFIG_DIR=/path/to/fake/claude CODEX_HOME=/path/to/fake/codex .build/release/AgentBoard --discover
+```
+
 ## Mutation gate
 
 ```sh

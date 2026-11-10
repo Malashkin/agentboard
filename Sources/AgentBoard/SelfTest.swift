@@ -249,6 +249,7 @@ enum SelfTest {
         hardeningSuite(core: core, project: project, repo: repo, root: root)
         projectsSuite(core: core, root: root)
         discoveryUnitSuite()
+        deliverySuite(core: core, project: project, repo: repo)
         discoverySuite(core: core, root: root)
 
         print("")

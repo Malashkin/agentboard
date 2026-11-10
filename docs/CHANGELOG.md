@@ -40,7 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Suggested projects: folders where Claude Code or Codex worked in the last 60 days but that aren't on the board appear under **Suggested** in the sidebar (➕ adds it in one click, ✕ ignores it; "N ignored · show" brings ignored folders back); a banner appears when a live agent session runs in such a folder. Reads only `~/.claude/projects` and `~/.codex/sessions`.
+- MIT license (`LICENSE`).
+- Self-test: a human comment reaching a session through every delivery point — next prompt, after a tool call, after a failed one, end of turn (blocks the stop once, no loop) — plus Codex sessions, order of several comments, closed sessions, unknown agents.
+- Suggested projects: folders where Claude Code or Codex worked in the last 60 days but that aren't on the board appear under **Suggested** in the sidebar (➕ adds it in one click, ✕ ignores it; "N ignored · show" brings ignored folders back); a banner appears when a live agent session runs in such a folder. Reads only `~/.claude/projects` and `~/.codex/sessions`: the newest 2000 sessions, 16 KB of each, folder lookups cached for 10 min, no git launch for plain folders (3000 sessions × 300 KB: 4.9 s / 750 MB → 0.7 s / 31 MB). `AgentBoard --discover` is a read-only dry run with timing.
 - Rename a project (shown name only) and remove it from the sidebar — keeping its history so re-adding the folder restores tasks, feed and notes, or deleting it; right-click a project in the sidebar.
 - Role-based documentation in `docs/` (AGENTS.md entry point, product, architecture with ADRs, backend API, frontend, devops, testing, security, monitoring).
 - Local JSON API to create tasks and launch an agent on a task (`POST /api/tasks`, `POST /api/tasks/launch`).
@@ -52,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 295 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 317 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

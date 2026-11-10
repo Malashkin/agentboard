@@ -78,7 +78,7 @@ final class Store: ObservableObject {
         if projects != s.projects {
             let first = projects.isEmpty
             projects = s.projects
-            if !first { refreshSuggestions() }
+            if !first { checkedFolders.removeAll(); refreshSuggestions() }
         }
         if agents != s.agents { agents = s.agents }
         if tasks != s.tasks { tasks = s.tasks }
@@ -103,7 +103,7 @@ final class Store: ObservableObject {
         scanning = true
         core { c in
             let known = (c.allProjects() + c.archivedProjects()).map { ProjectDiscovery.Known(path: $0.path, commonDir: $0.commonDir) }
-            DispatchQueue.global(qos: .utility).async {
+            DispatchQueue.global(qos: .background).async {
                 let found = ProjectDiscovery.scan(known: known)
                 DispatchQueue.main.async {
                     if self.suggestions != found { ThemeStore.animate { self.suggestions = found } }
@@ -117,8 +117,14 @@ final class Store: ObservableObject {
     /// A session is running in a folder that isn't on the board: rescan so it shows up while it works.
     func noteUnknownFolder(_ cwd: String) {
         liveFolders[cwd] = Date().timeIntervalSince1970
+        // Rescan once per new folder: an agent working in ~ (excluded) must not trigger a scan every 30 s.
+        guard !checkedFolders.contains(cwd) else { return }
+        checkedFolders.insert(cwd)
+        if ProjectDiscovery.isExcluded(cwd, ProjectDiscovery.defaultExcluded) { return }
         if !suggestions.contains(where: { Self.covers($0, cwd) }) { refreshSuggestions() }
     }
+    /// Folders from live sessions already checked by a scan (cleared when the board's projects change).
+    private var checkedFolders: Set<String> = []
 
     static func covers(_ c: ProjectDiscovery.Candidate, _ cwd: String) -> Bool { cwd == c.path || cwd.hasPrefix(c.path + "/") }
 
