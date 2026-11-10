@@ -79,8 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         core.notifyWaitingAgent = { a, title, body in Notifier.shared.postWaiting(agentId: a.id, title: title, body: body) }
         core.onPrompt = { a, prompt in TaskAutopilot.shared.onPrompt(a, prompt) }
         core.onSessionEnd = { a in TaskAutopilot.shared.onSessionEnd(a) }
+        core.onUnknownFolder = { cwd in DispatchQueue.main.async { store.noteUnknownFolder(cwd) } }
         core.q.async { core.cleanupOldData() }
         store.reload()
+        store.refreshSuggestions()
 
         Integrations.writeBridge()
         startServer()
@@ -93,11 +95,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Narrator.shared.start()
         AwayWatcher.shared.start()
         // Keep each project's git hooks current (pre-commit guard added in newer versions, moved folders).
-        DispatchQueue.global(qos: .utility).async {
+        // Not in a side instance (test data / bridge dir): it would point the real Claude Code / Codex / repos at it.
+        if !Integrations.isSideInstance { DispatchQueue.global(qos: .utility).async {
             for p in core.q.sync(execute: { core.allProjects() }) { try? Integrations.installGitHook(p) }
             // MCP registrations from older versions have no token (or an old port) → re-register.
             Integrations.refreshMCPRegistrations()
-        }
+        } }
 
         // Debug aid: AGENTBOARD_SNAPSHOT=/path.png saves an image of the main window (no screen-recording permission needed).
         if let shot = ProcessInfo.processInfo.environment["AGENTBOARD_SNAPSHOT"] {

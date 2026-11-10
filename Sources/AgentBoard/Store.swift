@@ -28,6 +28,15 @@ final class Store: ObservableObject {
     @Published var awayDigest: AwayDigest?
     @Published var subagents: [SubagentItem] = []
     @Published var importReport: [String: String] = [:]
+    /// Folders where agents worked recently that aren't on the board (see ProjectDiscovery).
+    @Published var suggestions: [ProjectDiscovery.Candidate] = []
+    /// Folder → when a live session from it last reached AgentBoard (hooks / Codex) while it wasn't on the board.
+    @Published var liveFolders: [String: Double] = [:]
+    /// "Not now" on the live banner: hidden for this run of the app, still listed under Suggested.
+    @Published var dismissedLive: Set<String> = []
+    @Published var ignoredCount = ProjectDiscovery.ignored.count
+    private var scanning = false
+    private var rescanPending = false
 
     private var reloadScheduled = false
     private var ticker: AnyCancellable?
@@ -66,7 +75,11 @@ final class Store: ObservableObject {
     /// Only publishes what actually changed: re-assigning equal arrays made SwiftUI redraw
     /// (and re-run transitions in) the feed and agent cards on every hook event — visible as flicker.
     private func apply(_ s: Core.Snapshot) {
-        if projects != s.projects { projects = s.projects }
+        if projects != s.projects {
+            let first = projects.isEmpty
+            projects = s.projects
+            if !first { refreshSuggestions() }
+        }
         if agents != s.agents { agents = s.agents }
         if tasks != s.tasks { tasks = s.tasks }
         if events != s.events { events = s.events }
@@ -81,6 +94,64 @@ final class Store: ObservableObject {
 
 
     func requestOpenMain() { openMainTick += 1 }
+
+    // MARK: Suggested projects
+
+    /// Re-reads recent Claude Code / Codex sessions off the main thread. Calls while a scan runs coalesce into one more.
+    func refreshSuggestions() {
+        if scanning { rescanPending = true; return }
+        scanning = true
+        core { c in
+            let known = (c.allProjects() + c.archivedProjects()).map { ProjectDiscovery.Known(path: $0.path, commonDir: $0.commonDir) }
+            DispatchQueue.global(qos: .utility).async {
+                let found = ProjectDiscovery.scan(known: known)
+                DispatchQueue.main.async {
+                    if self.suggestions != found { ThemeStore.animate { self.suggestions = found } }
+                    self.scanning = false
+                    if self.rescanPending { self.rescanPending = false; self.refreshSuggestions() }
+                }
+            }
+        }
+    }
+
+    /// A session is running in a folder that isn't on the board: rescan so it shows up while it works.
+    func noteUnknownFolder(_ cwd: String) {
+        liveFolders[cwd] = Date().timeIntervalSince1970
+        if !suggestions.contains(where: { Self.covers($0, cwd) }) { refreshSuggestions() }
+    }
+
+    static func covers(_ c: ProjectDiscovery.Candidate, _ cwd: String) -> Bool { cwd == c.path || cwd.hasPrefix(c.path + "/") }
+
+    /// The suggestion an agent is working in right now (last 15 min), unless dismissed.
+    var liveSuggestion: ProjectDiscovery.Candidate? {
+        let horizon = now.timeIntervalSince1970 - 900
+        return suggestions.compactMap { c -> (ProjectDiscovery.Candidate, Double)? in
+            guard !dismissedLive.contains(c.path) else { return nil }
+            let t = liveFolders.filter { Self.covers(c, $0.key) }.map(\.value).max() ?? 0
+            return t >= horizon ? (c, t) : nil
+        }.max { $0.1 < $1.1 }?.0
+    }
+
+    func addSuggestion(_ c: ProjectDiscovery.Candidate, completion: @escaping (String?) -> Void) {
+        addProject(path: c.path) { err in
+            if err == nil { ThemeStore.animate { self.suggestions.removeAll { $0.path == c.path } } }
+            completion(err)
+        }
+    }
+
+    /// Never suggested again (kept in UserDefaults); adding the folder by hand still works.
+    func ignoreSuggestion(_ c: ProjectDiscovery.Candidate) {
+        ProjectDiscovery.ignore(c.path)
+        ignoredCount = ProjectDiscovery.ignored.count
+        ThemeStore.animate { suggestions.removeAll { $0.path == c.path } }
+    }
+
+    /// Ignored folders are suggested again (if agents still worked there in the last 60 days).
+    func clearIgnoredSuggestions() {
+        ProjectDiscovery.clearIgnored()
+        ignoredCount = 0
+        refreshSuggestions()
+    }
 
     // MARK: Sidebar order (drag to reorder)
 

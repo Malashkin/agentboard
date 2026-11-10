@@ -243,6 +243,13 @@ enum Integrations {
     }
 
     /// Called at launch: older installs registered MCP without the token.
+    /// Started with its own data or bridge folder (self-test, UI snapshots, a second copy): must leave the real
+    /// ~/.claude.json, ~/.codex/config.toml and project git hooks alone.
+    static var isSideInstance: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return ["AGENTBOARD_DATA_DIR", "AGENTBOARD_BRIDGE_DIR"].contains { !(env[$0] ?? "").isEmpty }
+    }
+
     static func refreshMCPRegistrations() {
         if claudeMCPNeedsRefresh() { try? installClaudeMCP() }
         if codexMCPNeedsRefresh() {

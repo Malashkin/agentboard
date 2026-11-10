@@ -60,6 +60,24 @@ struct MainView: View {
                     }
                     .onMove { store.moveProjects(from: $0, to: $1) }
                 }
+                if !store.suggestions.isEmpty || store.ignoredCount > 0 {
+                    Section {
+                        ForEach(store.suggestions) { c in
+                            SuggestionRow(candidate: c, live: store.liveSuggestion?.path == c.path) { add(c) }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Suggested")
+                                .help("Folders where Claude Code or Codex worked in the last 60 days that aren't on the board")
+                            Spacer()
+                            if store.ignoredCount > 0 {
+                                Button("\(store.ignoredCount) ignored · show") { store.clearIgnoredSuggestions() }
+                                    .buttonStyle(.borderless).font(.caption2)
+                                    .help("Suggest the folders you ignored again")
+                            }
+                        }
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 210, ideal: 240)
             .alert("Rename project", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
@@ -100,6 +118,10 @@ struct MainView: View {
                 if let err = store.lastError {
                     Banner(text: err, color: .orange, icon: "exclamationmark.triangle") { store.lastError = nil }
                 }
+                if let c = store.liveSuggestion {
+                    LiveFolderBanner(candidate: c) { add(c) }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 if let d = store.awayDigest {
                     AwayBanner(digest: d).transition(.move(edge: .top).combined(with: .opacity))
                 }
@@ -121,6 +143,7 @@ struct MainView: View {
             }
             .background(theme.background ?? Color.clear)
             .animation(theme.anim(), value: store.pending.count)
+            .animation(theme.anim(), value: store.liveSuggestion?.path)
             .animation(theme.anim(.easeInOut(duration: 0.2)), value: selection)
         }
         .tint(theme.accent)
@@ -155,6 +178,13 @@ struct MainView: View {
         return f.string(from: d)
     }
 
+    func add(_ c: ProjectDiscovery.Candidate) {
+        store.addSuggestion(c) { err in
+            if let err { addError = err }
+            else if let p = store.projects.first(where: { $0.path == c.path }) { selection = .project(p.id) }
+        }
+    }
+
     func addProject() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -167,6 +197,64 @@ struct MainView: View {
             if let err { addError = err }
             else if let p = store.projects.last(where: { $0.path.hasSuffix(url.lastPathComponent) }) { selection = .project(p.id) }
         }
+    }
+}
+
+/// A folder agents worked in that isn't on the board: one click adds it (history is imported as usual).
+struct SuggestionRow: View {
+    @EnvironmentObject var store: Store
+    let candidate: ProjectDiscovery.Candidate
+    let live: Bool
+    let onAdd: () -> Void
+
+    var body: some View {
+        HStack {
+            Label {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(candidate.name).foregroundStyle(.secondary)
+                    Text(live ? "agent working now" : "\(candidate.sessions) session\(candidate.sessions == 1 ? "" : "s") · "
+                         + MainView.lastWorkLabel(candidate.lastAt, now: store.now))
+                        .font(.caption2).foregroundStyle(live ? Color.green : Color.secondary)
+                }
+            } icon: { Image(systemName: "folder.badge.plus").foregroundStyle(.secondary) }
+            Spacer()
+            Button { onAdd() } label: { Image(systemName: "plus.circle") }
+                .buttonStyle(.borderless)
+                .help("Add to the board")
+            Button { store.ignoreSuggestion(candidate) } label: { Image(systemName: "xmark") }
+                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .help("Ignore — don’t suggest this folder again")
+        }
+        .help("\(candidate.path)\n\(candidate.toolsLabel)\(candidate.isGit ? "" : " · not a git repository")")
+        .contextMenu {
+            Button("Add to AgentBoard") { onAdd() }
+            Button("Open in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: candidate.path)]) }
+            Divider()
+            Button("Ignore (don’t suggest again)") { store.ignoreSuggestion(candidate) }
+        }
+    }
+}
+
+struct LiveFolderBanner: View {
+    @EnvironmentObject var store: Store
+    let candidate: ProjectDiscovery.Candidate
+    let onAdd: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "folder.badge.plus").foregroundStyle(Color.accentColor)
+            Text("An agent is working in **\(candidate.name)**, which isn’t on the board.").lineLimit(2)
+                .help(candidate.path)
+            Spacer()
+            Button("Add project") { onAdd() }.controlSize(.small)
+            Button("Not now") { store.dismissedLive.insert(candidate.path) }
+                .buttonStyle(.borderless).controlSize(.small)
+            Button("Ignore") { store.ignoreSuggestion(candidate) }
+                .buttonStyle(.borderless).controlSize(.small)
+                .help("Don’t suggest this folder again")
+        }
+        .padding(10)
+        .background(Color.accentColor.opacity(0.08))
     }
 }
 

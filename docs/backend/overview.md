@@ -24,6 +24,7 @@ All sources are in `Sources/AgentBoard/`.
 | `SessionDelivery.swift` | Messages into sessions: inbox, terminal typing, background resume |
 | `Workspaces.swift` | Task worktrees, terminal launch, diff/merge/PR, diff parser |
 | `HistoryImporter.swift` | Imports past Claude/Codex sessions and git commits |
+| `ProjectDiscovery.swift` | Suggests folders agents worked in (last 60 days) that aren't on the board: reads `cwd` from session files, rolls up to the git top level / main checkout, drops known, removed, ignored, excluded (`~`, `~/Desktop`, `~/Library`, temp, hidden) and container folders |
 | `SummaryService.swift` | Evening summary |
 | `GitMonitor.swift` | Worktrees, status and today's commits per project |
 | `Notifier.swift` | Notifications with action buttons |

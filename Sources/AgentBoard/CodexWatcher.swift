@@ -161,7 +161,8 @@ extension Core {
         }
         if type == "turn_context", let cwd = p.str("cwd") { st.cwd = cwd; return }
         // Sessions that report through Codex hooks are already on the board, live.
-        guard !st.sessionId.isEmpty, !hookSessions.contains(st.sessionId), let project = projectFor(cwd: st.cwd) else { return }
+        guard !st.sessionId.isEmpty, !hookSessions.contains(st.sessionId) else { return }
+        guard let project = projectFor(cwd: st.cwd) else { noteUnknownFolder(st.cwd); return }
 
         let kind = p.s("type")
         func agent() -> Agent { touchAgent(tool: "codex", sessionId: st.sessionId, project: project, cwd: st.cwd, transcript: nil, revive: true) }

@@ -248,6 +248,8 @@ enum SelfTest {
         gapSuite(core: core, project: project, repo: repo, root: root)
         hardeningSuite(core: core, project: project, repo: repo, root: root)
         projectsSuite(core: core, root: root)
+        discoveryUnitSuite()
+        discoverySuite(core: core, root: root)
 
         print("")
         for l in ["unit", "contract", "integration"] {

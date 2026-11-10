@@ -30,7 +30,7 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 
 1. Requirements: macOS 14+, Command Line Tools (`xcode-select --install`). Xcode is not needed.
 2. Build and install: `./scripts/build-app.sh --install` (copies `AgentBoard.app` to `/Applications`).
-3. In the app: **Integrations → Connect** (Claude Code / Codex), then **Add project**.
+3. In the app: **Integrations → Connect** (Claude Code / Codex), then **Add project** (or one click on a folder under **Suggested** — folders agents worked in recently).
 4. Restart open Claude Code sessions so they pick up the hooks and the MCP server.
 
 ## Commands

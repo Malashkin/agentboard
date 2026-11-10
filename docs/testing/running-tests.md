@@ -39,4 +39,6 @@ curl -s -X POST -H 'Content-Type: application/json' -H @$T/bridge/auth-header \
 AGENTBOARD_DATA_DIR=… AGENTBOARD_SNAPSHOT=/tmp/shot.png AGENTBOARD_SNAPSHOT_DELAY=6 \
   dist/AgentBoard.app/Contents/MacOS/AgentBoard -port 7789
 ```
-A copy of the real database in `AGENTBOARD_DATA_DIR` shows real data without touching it.
+A copy of the real database in `AGENTBOARD_DATA_DIR` shows real data without touching it. Always set
+`AGENTBOARD_BRIDGE_DIR` to a temp folder too; with either variable set the instance leaves the real MCP registrations
+and project git hooks alone.

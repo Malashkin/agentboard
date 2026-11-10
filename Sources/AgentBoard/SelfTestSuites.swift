@@ -735,6 +735,156 @@ extension SelfTest {
     }
 }
 
+extension SelfTest {
+    // MARK: - Suggested projects (ProjectDiscovery)
+
+    static func discoveryUnitSuite() {
+        section("Suggested projects: grouping and filters", layer: "unit")
+        typealias S = ProjectDiscovery.Session
+        typealias R = ProjectDiscovery.Resolved
+        let roots: [String: R] = [
+            "/w/app": R(root: "/w/app", commonDir: "/w/app/.git", isGit: true),
+            "/w/app/src": R(root: "/w/app", commonDir: "/w/app/.git", isGit: true),
+            "/w/app-wt": R(root: "/w/app", commonDir: "/w/app/.git", isGit: true),
+            "/w/lib": R(root: "/w/lib", commonDir: "/w/lib/.git", isGit: true),
+            "/w/known-wt": R(root: "/w/known-wt", commonDir: "/w/known/.git", isGit: true),
+            "/w/fun": R(root: "/w/fun", commonDir: "", isGit: false),
+            "/w/fun/bot": R(root: "/w/fun/bot", commonDir: "", isGit: false),
+            "/w/plain": R(root: "/w/plain", commonDir: "", isGit: false),
+            "/w/mono": R(root: "/w/mono", commonDir: "/w/mono/.git", isGit: true),
+            "/w/mono/pkg": R(root: "/w/mono/pkg", commonDir: "/w/mono/pkg/.git", isGit: true),
+            "/home": R(root: "/home", commonDir: "", isGit: false),
+            "/home/proj": R(root: "/home/proj", commonDir: "", isGit: false),
+            "/home/.cache/x": R(root: "/home/.cache/x", commonDir: "", isGit: false),
+            "/tmpx/a": R(root: "/tmpx/a", commonDir: "", isGit: false),
+            "/w/ignored": R(root: "/w/ignored", commonDir: "", isGit: false),
+        ]
+        func build(_ s: [S], known: [ProjectDiscovery.Known] = [], ignored: Set<String> = []) -> [ProjectDiscovery.Candidate] {
+            ProjectDiscovery.build(s, known: known, ignored: ignored, excluded: ["/home=", "/tmpx"], resolve: { roots[$0] })
+        }
+        func paths(_ c: [ProjectDiscovery.Candidate]) -> [String] { c.map(\.path) }
+
+        let app = build([S(tool: "claude", cwd: "/w/app/src", at: 10), S(tool: "codex", cwd: "/w/app-wt", at: 30),
+                         S(tool: "claude", cwd: "/w/app", at: 20)])
+        check(paths(app) == ["/w/app"], "a repo, its subfolder and its worktree are one suggestion", "\(paths(app))")
+        check(app.first?.sessions == 3 && app.first?.lastAt == 30, "…counting every session, latest time wins")
+        check(app.first?.tools == ["claude", "codex"] && app.first?.toolsLabel == "Claude Code · Codex", "…and both tools")
+
+        let order = build([S(tool: "claude", cwd: "/w/lib", at: 5), S(tool: "claude", cwd: "/w/app", at: 50), S(tool: "claude", cwd: "/w/plain", at: 20)])
+        check(paths(order) == ["/w/app", "/w/plain", "/w/lib"], "most recent first", "\(paths(order))")
+
+        let known = [ProjectDiscovery.Known(path: "/w/app", commonDir: "/w/app/.git"),
+                     ProjectDiscovery.Known(path: "/w/known", commonDir: "/w/known/.git")]
+        check(build([S(tool: "claude", cwd: "/w/app/src", at: 1)], known: known).isEmpty, "a folder inside a board project isn't suggested")
+        check(build([S(tool: "claude", cwd: "/w/app-wt", at: 1)], known: known).isEmpty, "a worktree of a board project isn't suggested")
+        check(build([S(tool: "claude", cwd: "/w/known-wt", at: 1)], known: known).isEmpty, "…even when it lives outside the project folder")
+        check(build([S(tool: "claude", cwd: "/w/ignored", at: 1)], ignored: ["/w/ignored"]).isEmpty, "an ignored folder isn't suggested")
+        check(build([S(tool: "claude", cwd: "/w/gone", at: 1)]).isEmpty, "a folder that no longer exists isn't suggested")
+
+        let home = build([S(tool: "claude", cwd: "/home", at: 1), S(tool: "claude", cwd: "/home/proj", at: 2)])
+        check(paths(home) == ["/home/proj"], "home itself is excluded (exact), a project inside it isn't", "\(paths(home))")
+        check(build([S(tool: "claude", cwd: "/tmpx/a", at: 1)]).isEmpty, "an excluded prefix hides everything under it")
+        check(build([S(tool: "claude", cwd: "/home/.cache/x", at: 1)]).isEmpty, "hidden folders (tool sandboxes, caches) aren't suggested")
+
+        let fun = build([S(tool: "claude", cwd: "/w/fun", at: 1), S(tool: "claude", cwd: "/w/fun/bot", at: 2)])
+        check(paths(fun) == ["/w/fun/bot"], "a plain folder holding other candidates is a container, not a project", "\(paths(fun))")
+        check(paths(build([S(tool: "claude", cwd: "/w/fun", at: 1)])) == ["/w/fun"], "…alone it is suggested")
+        let mono = build([S(tool: "claude", cwd: "/w/mono", at: 1), S(tool: "claude", cwd: "/w/mono/pkg", at: 2)])
+        check(Set(paths(mono)) == ["/w/mono", "/w/mono/pkg"], "a git repo holding a nested repo is still a project")
+        check(build([S(tool: "claude", cwd: "/w", at: 1)], known: [ProjectDiscovery.Known(path: "/w/x", commonDir: "")]).isEmpty,
+              "a plain folder holding a board project is a container")
+
+        let h = Data("""
+        {"type":"summary","summary":"x"}
+        not json
+        {"type":"user","cwd":"relative/dir"}
+        {"type":"user","cwd":"/Users/a/proj","sessionId":"s"}
+        """.utf8)
+        check(ProjectDiscovery.cwd(inHead: h, tool: "claude") == "/Users/a/proj", "Claude transcript: first absolute cwd, junk lines skipped")
+        let cx = Data(#"{"type":"session_meta","payload":{"id":"t","cwd":"/Users/a/cx"}}"#.utf8)
+        check(ProjectDiscovery.cwd(inHead: cx, tool: "codex") == "/Users/a/cx", "Codex rollout: cwd from session_meta")
+        check(ProjectDiscovery.cwd(inHead: Data("{}\n".utf8), tool: "claude") == nil, "no cwd → nil")
+        check(Integrations.isSideInstance, "an instance with its own data/bridge folder is a side instance (leaves real configs alone)")
+    }
+
+    static func discoverySuite(core: Core, root: String) {
+        section("Suggested projects: real folders and session files")
+        let fm = FileManager.default
+        let base = URL(fileURLWithPath: root).resolvingSymlinksInPath().path + "/disc"
+        let repo = base + "/shop", plain = base + "/notes", wt = base + "/shop-feature"
+        try? fm.createDirectory(atPath: repo + "/web/src", withIntermediateDirectories: true)
+        try? fm.createDirectory(atPath: plain, withIntermediateDirectories: true)
+        _ = Shell.git(["init", "-q", "-b", "main"], cwd: repo)
+        try? "x\n".write(toFile: repo + "/a.txt", atomically: true, encoding: .utf8)
+        _ = Shell.git(["add", "-A"], cwd: repo); _ = Shell.git(["commit", "-qm", "init"], cwd: repo)
+        _ = Shell.git(["worktree", "add", "-q", "-b", "feature", wt], cwd: repo)
+        let repoTop = Shell.git(["rev-parse", "--show-toplevel"], cwd: repo).line   // git spells /var as /private/var
+
+        let claudeDir = HistoryImporter.claudeRoot + "/-disc"
+        try? fm.createDirectory(atPath: claudeDir, withIntermediateDirectories: true)
+        func claude(_ name: String, _ cwd: String, age: Double = 0) {
+            let f = claudeDir + "/" + name + ".jsonl"
+            let body = #"{"type":"summary"}"# + "\n" + String(decoding: jsonData(["type": "user", "cwd": cwd, "sessionId": name]), as: UTF8.self) + "\n"
+            try? body.write(toFile: f, atomically: true, encoding: .utf8)
+            if age > 0 { try? fm.setAttributes([.modificationDate: Date().addingTimeInterval(-age)], ofItemAtPath: f) }
+        }
+        claude("d1", repo + "/web/src")
+        claude("d2", plain)
+        claude("d3", base + "/deleted-since")
+        claude("old", base + "/old-only", age: 90 * 86400)
+        try? fm.createDirectory(atPath: base + "/old-only", withIntermediateDirectories: true)
+        let codexDir = HistoryImporter.codexRoot + "/2026/11/10"
+        try? fm.createDirectory(atPath: codexDir, withIntermediateDirectories: true)
+        try? (String(decoding: jsonData(["type": "session_meta", "payload": ["id": "cx-disc", "cwd": wt]]), as: UTF8.self) + "\n")
+            .write(toFile: codexDir + "/rollout-disc.jsonl", atomically: true, encoding: .utf8)
+
+        func scan() -> [ProjectDiscovery.Candidate] {
+            let known = core.q.sync { (core.allProjects() + core.archivedProjects()).map { ProjectDiscovery.Known(path: $0.path, commonDir: $0.commonDir) } }
+            return ProjectDiscovery.scan(known: known, ignored: [], excluded: []).filter { $0.path.contains("/disc/") }
+        }
+        let found = scan()
+        let shop = found.first { $0.path == repoTop }
+        check(shop != nil, "a git repo agents worked in is suggested at its top level", "\(found.map(\.path))")
+        check(shop?.sessions == 2 && shop?.tools == ["claude", "codex"] && shop?.isGit == true,
+              "…its linked worktree's Codex session counts toward it", "\(String(describing: shop))")
+        check(!found.contains { $0.path.hasSuffix("/shop-feature") }, "the worktree itself isn't a separate suggestion")
+        check(found.contains { $0.path == plain && !$0.isGit }, "a plain folder (no git) is suggested too")
+        check(!found.contains { $0.path.hasSuffix("deleted-since") }, "folders that were deleted aren't suggested")
+        check(!found.contains { $0.path.hasSuffix("old-only") }, "sessions older than 60 days don't count")
+        check(ProjectDiscovery.scan(known: [], ignored: [], excluded: [base, "/private" + base]).allSatisfy { !$0.path.contains("/disc/") },
+              "excluded locations are skipped")
+
+        let saved = UserDefaults.standard.object(forKey: ProjectDiscovery.ignoredKey)
+        ProjectDiscovery.clearIgnored()
+        ProjectDiscovery.ignore(plain)
+        let afterIgnore = ProjectDiscovery.scan(known: [], excluded: []).map(\.path)
+        check(!afterIgnore.contains(plain) && afterIgnore.contains(repoTop), "an ignored folder disappears, others stay", "\(afterIgnore)")
+        ProjectDiscovery.clearIgnored()
+        check(ProjectDiscovery.scan(known: [], excluded: []).contains { $0.path == plain }, "\"show ignored\" brings it back")
+        if let saved { UserDefaults.standard.set(saved, forKey: ProjectDiscovery.ignoredKey) }
+
+        guard case .success(let p) = core.q.sync(execute: { core.addProject(path: repo) }) else { check(false, "suggested repo can be added"); return }
+        check(!scan().contains { $0.path == repoTop }, "once added it's no longer suggested")
+        core.q.sync { core.archiveProject(id: p.id) }
+        check(!scan().contains { $0.path == repoTop }, "a project removed from the board (history kept) isn't suggested again")
+        core.q.sync { core.removeProject(id: p.id) }
+
+        var reported: [String] = []
+        core.q.sync { core.onUnknownFolder = { reported.append($0) } }
+        func hook(_ sid: String, _ cwd: String) {
+            core.q.sync { core.handleClaudeHook(["hook_event_name": "PreToolUse", "session_id": sid, "cwd": cwd, "tool_name": "Read",
+                                                 "tool_input": ["file_path": cwd + "/x"]]) { _ in } }
+        }
+        hook("u1", plain)
+        hook("u1", plain)
+        check(core.q.sync { reported } == [plain], "a session in a folder off the board is reported once (throttled)", "\(reported)")
+        check(core.q.sync { core.db.query("SELECT 1 FROM agents WHERE session_id='u1'").isEmpty }, "…and still isn't tracked as an agent")
+        core.q.sync { core.onUnknownFolder = nil }
+        try? fm.removeItem(atPath: claudeDir)
+        try? fm.removeItem(atPath: codexDir + "/rollout-disc.jsonl")
+    }
+}
+
 extension MessageItem {
     /// Test-only: a message that never touched the database.
     init(fake id: Int64, from: String?, label: String, text: String) {

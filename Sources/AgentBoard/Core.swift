@@ -44,6 +44,17 @@ final class Core {
 
     var onChange: (() -> Void)?
     var notify: ((String, String) -> Void)?
+    /// An agent session is working in a folder that isn't on the board (called on `q`, at most every 30 s per folder).
+    var onUnknownFolder: ((String) -> Void)?
+    private var unknownSeen: [String: Double] = [:]
+
+    func noteUnknownFolder(_ cwd: String) {
+        guard !cwd.isEmpty, let cb = onUnknownFolder else { return }
+        let t = now()
+        if let last = unknownSeen[cwd], t - last < 30 { return }
+        unknownSeen[cwd] = t
+        cb(cwd)
+    }
 
     /// 100 superhero names for agents; the first free one is given to each new session.
     static let heroNames = [
@@ -805,7 +816,7 @@ final class Core {
             let text = jsonString(input)
             found = allProjects().filter { $0.isMentioned(in: text) }.max { $0.path.count < $1.path.count }
         }
-        guard let project = found else { reply(nil); return }
+        guard let project = found else { noteUnknownFolder(cwd); reply(nil); return }
         let agent = touchAgent(tool: agentTool, sessionId: sid, project: project, cwd: cwd,
                                transcript: j.str("transcript_path"), revive: event != "SessionEnd")
         if let tty = j.str("_tty"), tty != agent.tty { setAgent(agent.id, ["tty": tty]) }
@@ -1207,7 +1218,7 @@ final class Core {
             let all = allProjects()
             if all.count == 1 { project = all[0]; cwd = all[0].path }
         }
-        guard let project else { return }
+        guard let project else { noteUnknownFolder(cwd); return }
         let agent = touchAgent(tool: "codex", sessionId: thread, project: project, cwd: cwd, transcript: nil, revive: true)
         if CodexWatcher.shared.isWatched(thread) || hookSessions.contains(thread) { changed(); return }
         let inputs = (j["input-messages"] as? [String]) ?? (j["input_messages"] as? [String]) ?? []

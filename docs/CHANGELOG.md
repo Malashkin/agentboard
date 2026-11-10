@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Suggested projects: folders where Claude Code or Codex worked in the last 60 days but that aren't on the board appear under **Suggested** in the sidebar (➕ adds it in one click, ✕ ignores it; "N ignored · show" brings ignored folders back); a banner appears when a live agent session runs in such a folder. Reads only `~/.claude/projects` and `~/.codex/sessions`.
 - Rename a project (shown name only) and remove it from the sidebar — keeping its history so re-adding the folder restores tasks, feed and notes, or deleting it; right-click a project in the sidebar.
 - Role-based documentation in `docs/` (AGENTS.md entry point, product, architecture with ADRs, backend API, frontend, devops, testing, security, monitoring).
 - Local JSON API to create tasks and launch an agent on a task (`POST /api/tasks`, `POST /api/tasks/launch`).
@@ -25,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 262 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 295 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New app logo ("terminals").
 
 ### Fixed
+- A side instance (own `AGENTBOARD_DATA_DIR` / `AGENTBOARD_BRIDGE_DIR`, e.g. for UI snapshots) no longer re-registers MCP in the real `~/.claude.json` / `~/.codex/config.toml` or reinstalls project git hooks at startup.
 - Docs: integrations, monitoring, data model, services, components and test instructions describe the token, archived projects and the new polling intervals.
 - The hook bridge read the port from `~/.agentboard/port` even when the bridge lived elsewhere (`AGENTBOARD_BRIDGE_DIR`), so isolated instances talked to the real app.
 - Installers wrote to the real `~/.claude` / `~/.codex` even when `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointed elsewhere.
