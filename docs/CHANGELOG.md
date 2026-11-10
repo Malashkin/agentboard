@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 317 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 338 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.
