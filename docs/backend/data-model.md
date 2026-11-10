@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Data model
@@ -25,7 +25,7 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `projects` | id, name, path, common_dir, client, aliases | `aliases`: former paths (moved folders) |
+| `projects` | id, name, path, common_dir, client, aliases, archived_at | `aliases`: former paths (moved folders); `archived_at`: removed with *keep history* — hidden everywhere, restored (same id) when the same folder is added again |
 | `agents` | id, project_id, tool, session_id, name, cwd, root, branch, status, last_prompt, focus, last_action, tty, stuck, narrative, pinned, started_at, last_seen, ended_at | status: working/waiting/idle/ended |
 | `tasks` | id, project_id, title, details, client, status, assignee, created_by, worktree, branch, base_branch | created_by: `user`, agent id, or `auto` |
 | `events` | id, project_id, agent_id, kind, title, detail, client, ref, created_at, sub, task_id | kinds below |

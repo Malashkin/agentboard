@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Backend overview
@@ -13,7 +13,8 @@ All sources are in `Sources/AgentBoard/`.
 | `Core.swift` | Database setup and migrations, snapshot for the UI, projects/agents/tasks/events/messages, Claude & Codex hook handler, commit flow, routing, pinning, data retention |
 | `Coordination.swift` | Reservations and pre-commit guard, stuck detection, permission/question/plan flow, launched-task claiming |
 | `MCPServer.swift` | MCP JSON-RPC: tool definitions and handlers |
-| `HTTPServer.swift` | Loopback HTTP/1.1 server (Network.framework), delayed replies |
+| `HTTPServer.swift` | Loopback HTTP/1.1 server (Network.framework), delayed replies; limits: 8 MB request, 256 connections, 30 s to send a request |
+| `Auth.swift` | Per-install token (`~/.agentboard/token`), header check, constant-time compare, private (0600) file writes |
 | `Integrations.swift` | Bridge script, Claude/Codex hooks and MCP registration (paths follow `CLAUDE_CONFIG_DIR` / `CODEX_HOME`), git hooks, AGENTS.md snippet |
 | `CodexWatcher.swift` | Follows Codex rollout logs (for sessions without hooks) |
 | `SessionLiveness.swift` | Reads `~/.claude/sessions/*.json`, verifies processes, marks open/closed sessions |

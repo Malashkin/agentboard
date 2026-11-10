@@ -1,7 +1,7 @@
 ---
 audience: frontend
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Views and components
@@ -16,4 +16,5 @@ updated: 2026-11-09
 | Time | `Views/TimeViews.swift` | Time per client/task |
 | Main, banners, approvals | `Views/MainView.swift` | Sidebar, *While you were away*, approval rows (commit/permission/question/plan) |
 | Settings, menu bar, integrations, summaries | `Views/OtherViews.swift` | |
-| Shared | `Views/Components.swift` | `StatusBadge`, `Pill`, `Card`, `StatTile`, `MarkdownView`, `smoothNumber`, `animateRows`, `feedRowTransition` |
+| Shared | `Views/Components.swift` | `StatusBadge`, `Pill`, `Card`, `StatTile`, `MarkdownView`, `smoothNumber`, `animateRows`, `feedRowTransition`; `MarkdownView.unlinked` shows links as plain text with the URL |
+| Theme | `Theme.swift` | Colors, `PulseDot` (the "working" pulse — a Core Animation layer via `PulseRing`, never a SwiftUI `repeatForever`, see [overview.md](overview.md#performance-rules)) |

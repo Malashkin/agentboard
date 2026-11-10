@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Data flows
@@ -14,7 +14,7 @@ sequenceDiagram
   participant B as agentboard-hook
   participant S as AgentBoard (Core)
   A->>B: PreToolUse JSON (stdin)
-  B->>S: POST /hook/claude?tty=ttysNNN
+  B->>S: POST /hook/claude?tty=ttysNNN (X-AgentBoard-Token)
   S->>S: find project (pinned → cwd → known session → files mentioned)
   S->>S: record action, check reservation, conflict warning
   alt reserved by another agent
@@ -52,7 +52,7 @@ sequenceDiagram
   participant S as AgentBoard
   participant G as git pre-commit hook
   X->>S: PreToolUse git commit → commitIntent[repo root] = B
-  G->>S: POST /hook/git-precommit (root + staged files)
+  G->>S: POST /hook/git-precommit (root + staged files, token)
   S->>S: staged files ∩ exclusive reservations of other active agents
   S-->>G: refusal text (or empty)
   G-->>X: exit 1 with the message (commit aborted)

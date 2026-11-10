@@ -1,7 +1,7 @@
 ---
 audience: testing
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Running tests
@@ -28,8 +28,8 @@ Don't edit sources while it runs. Every mutant must be KILLED; add or strengthen
 T=$(mktemp -d)
 AGENTBOARD_DATA_DIR=$T/data AGENTBOARD_BRIDGE_DIR=$T/bridge CLAUDE_CONFIG_DIR=$T/claude CODEX_HOME=$T/codex \
   .build/release/AgentBoard -port 7788 &
-curl -s 127.0.0.1:7788/health
-curl -s -X POST -H 'Content-Type: application/json' \
+curl -s 127.0.0.1:7788/health                      # the only route without the token
+curl -s -X POST -H 'Content-Type: application/json' -H @$T/bridge/auth-header \
   --data '{"hook_event_name":"SessionStart","session_id":"s1","cwd":"/path/to/project"}' 127.0.0.1:7788/hook/claude
 ```
 

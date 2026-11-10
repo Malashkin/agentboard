@@ -1,7 +1,7 @@
 ---
 audience: devops
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Build and install
@@ -23,15 +23,16 @@ Bundle id `app.agentboard.mac`, version in the script's Info.plist.
 ## Update
 
 Quit the app, run `./scripts/build-app.sh --install`, open it again. The bridge script and git hooks are
-refreshed at launch. After changes to hook events, run **Integrations → Connect** (or
-`AgentBoard --install-claude`) and restart agent sessions.
+refreshed at launch, and MCP registrations whose URL or token is stale are rewritten. After changes to hook
+events, run **Integrations → Connect** (or `AgentBoard --install-claude`) and restart agent sessions. An
+update that introduces or changes the token needs open sessions restarted (their MCP gets 401 until then).
 
 ## Uninstall
 
 1. Integrations → disconnect, or `AgentBoard --uninstall-claude`.
 2. Remove `~/.codex/hooks.json` entries containing `agentboard-hook` and `[mcp_servers.agentboard]` from `~/.codex/config.toml`.
 3. Remove project git hook lines containing `agentboard-hook` (project settings → remove).
-4. Delete `/Applications/AgentBoard.app`, `~/.agentboard`, `~/Library/Application Support/AgentBoard`.
+4. Delete `/Applications/AgentBoard.app`, `~/.agentboard` (bridge, token), `~/Library/Application Support/AgentBoard`.
 
 ## Release
 

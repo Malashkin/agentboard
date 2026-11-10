@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Architecture overview
@@ -52,6 +52,7 @@ flowchart LR
 | Component | Responsibility | Source |
 |---|---|---|
 | HTTPServer | Loopback HTTP/1.1, one request per connection, delayed replies | `HTTPServer.swift` |
+| Auth | Per-install token every request except `GET /health` must present | `Auth.swift` |
 | Core | DB, routing, hook handling, tasks, messages, commits | `Core.swift` |
 | Coordination | Reservations, pre-commit guard, stuck detection, permission flow | `Coordination.swift` |
 | MCP server | JSON-RPC tools for agents | `MCPServer.swift` |
@@ -64,6 +65,8 @@ flowchart LR
 ## Trust boundaries
 
 - Agents and their hooks run as the user; their content is **untrusted text** (it may quote web pages).
-- The HTTP server is reachable by any local process; browser requests are filtered by Origin/Host
-  checks (see [security/overview.md](../security/overview.md) for known gaps).
+- The HTTP server is reachable by any local process, so every request except `GET /health` must carry the
+  per-install token ([ADR-007](decisions/007-per-install-token.md)); browser requests are also refused by
+  Origin/Host checks. Routes that act for the human are opt-in (see [security/overview.md](../security/overview.md)).
+- Agents are identified only by their exact `agent_id`; messages from other agents reach a session as data, not instructions.
 - Model calls send activity text to Anthropic through the user's Claude Code login.

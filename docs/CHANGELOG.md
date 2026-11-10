@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New app logo ("terminals").
 
 ### Fixed
+- Docs: integrations, monitoring, data model, services, components and test instructions describe the token, archived projects and the new polling intervals.
 - The hook bridge read the port from `~/.agentboard/port` even when the bridge lived elsewhere (`AGENTBOARD_BRIDGE_DIR`), so isolated instances talked to the real app.
 - Installers wrote to the real `~/.claude` / `~/.codex` even when `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointed elsewhere.
 - Branch slugs could end with a dash after being cut to 40 characters.

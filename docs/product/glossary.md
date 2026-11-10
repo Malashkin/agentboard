@@ -1,7 +1,7 @@
 ---
 audience: product
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Glossary
@@ -22,3 +22,5 @@ updated: 2026-11-09
 | Task worktree | A git worktree + branch `agent/<id>-<slug>` created for a task |
 | Narrative | The plain-language line about what an agent is doing |
 | Client | Who the work is for; set on a project (default) or per task |
+| Archived project | A project removed with *keep its history*: hidden from the dashboard, its data kept; adding the same folder again restores it |
+| Token | The per-install secret in `~/.agentboard/token`; every local request except `GET /health` must present it |
