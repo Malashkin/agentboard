@@ -567,6 +567,32 @@ extension SelfTest {
         check(!reg.error && reg.text.contains("agent_id"), "a client without hooks can register", reg.text.trunc(80))
         check(tool("register_agent", ["cwd": "/definitely/not/a/project"]).error, "registering outside known projects is refused")
 
+        section("A notification is not always a question")
+        // Observed on a real machine: a turn ends, and about a minute later Claude Code sends
+        // Notification "Claude is waiting for your input". Four agents sat on the board asking
+        // for an answer none of them had asked for, and nothing cleared it.
+        check(Core.isIdleNudge("Claude is waiting for your input"), "the nudge after a turn is recognised")
+        check(!Core.isIdleNudge("Claude needs your permission to use Bash"),
+              "a permission request is not a nudge")
+        check(!Core.isIdleNudge("A message from another session needs your approval"),
+              "an approval request is not a nudge")
+        check(!Core.isIdleNudge(""), "an empty message is not a nudge")
+
+        _ = hook(["hook_event_name": "Stop", "session_id": "mx", "cwd": repo, "last_assistant_message": "done"])
+        check(core.q.sync { core.agent(id: mx.id)?.status } == "idle", "a finished turn leaves the agent idle")
+        _ = hook(["hook_event_name": "Notification", "session_id": "mx", "cwd": repo,
+                  "message": "Claude is waiting for your input"])
+        check(core.q.sync { core.agent(id: mx.id)?.status } == "idle",
+              "…and the nudge that follows it does not turn the agent into one waiting for a reply",
+              core.q.sync { core.agent(id: mx.id)?.status } ?? "")
+        check(core.q.sync { !core.db.query("SELECT 1 FROM events WHERE agent_id=? AND kind='waiting'", [mx.id]).isEmpty },
+              "the nudge is still recorded in the feed — Claude did say it")
+        _ = hook(["hook_event_name": "Notification", "session_id": "mx", "cwd": repo,
+                  "message": "Claude needs your permission to use Bash"])
+        check(core.q.sync { core.agent(id: mx.id)?.status } == "waiting",
+              "a notification that is not the nudge still means the agent waits for you",
+              core.q.sync { core.agent(id: mx.id)?.status } ?? "")
+
         section("Delivering a human message into a session")
         _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "mx", "cwd": repo, "prompt": "Refactor the parser please"])
         let r = SessionDelivery.run(agentId: mx.id, text: "also update the docs", mode: .auto)

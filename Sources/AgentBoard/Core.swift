@@ -1015,7 +1015,26 @@ final class Core {
 
         case "Notification":
             let msg = j.str("message") ?? "The agent is waiting for your reply"
-            setAgent(agent.id, ["status": "waiting", "last_action": msg.trunc(200)])
+            // This hook carries two different things. One is a real block: a permission, a
+            // question, an approval the agent cannot continue without. The other is a nudge
+            // Claude Code sends about a minute after a turn ends, worded "Claude is waiting for
+            // your input" — the agent is simply sitting at its prompt with nothing to ask.
+            //
+            // Treating both as "waiting for you" made the card ask for an answer that had never
+            // been asked for, and nothing cleared it: the nudge arrives AFTER Stop (which sets
+            // idle) and an agent at its prompt produces no further hooks. So the board kept
+            // claiming four agents needed a reply while they were done.
+            //
+            // A real block always leaves its own record — PermissionRequest sets the status
+            // itself and puts the request in "Needs your decision" — so "nothing pending for
+            // this agent" is the reliable half of the test. The wording is the second half, and
+            // only matters when in-app permissions are off and PermissionRequest never ran:
+            // there the notification is the only signal, and dropping it would be worse than
+            // keeping a noisy one. A changed wording therefore degrades to the old behaviour
+            // rather than losing the block.
+            let blocked = pending.values.contains { $0.commit.agentId == agent.id }
+            let nudge = !blocked && Self.isIdleNudge(msg)
+            setAgent(agent.id, ["status": nudge ? "idle" : "waiting", "last_action": msg.trunc(200)])
             addEvent(project: project.id, agent: agent.id, kind: "waiting", title: "\(agent.name): \(msg.trunc(200))")
             // A request already shown in the app was announced there.
             if AppSettings.notifyWaiting && !pending.values.contains(where: { $0.commit.agentId == agent.id }) {
@@ -1059,6 +1078,14 @@ final class Core {
 
     /// "ttys004" — the only shape of terminal name we accept from hooks.
     static let humanOnlyRoutes: Set<String> = ["/api/decide", "/api/tasks", "/api/tasks/launch"]
+
+    /// Claude Code's "nothing to ask, just idle at the prompt" notification.
+    ///
+    /// Recognised by wording because the hook payload carries nothing else to tell it apart from
+    /// a real block. Kept narrow on purpose: anything else stays a block.
+    static func isIdleNudge(_ message: String) -> Bool {
+        message.lowercased().contains("waiting for your input")
+    }
 
     static func isTTYName(_ s: String) -> Bool {
         s.range(of: #"^ttys[0-9]{1,4}$"#, options: .regularExpression) != nil

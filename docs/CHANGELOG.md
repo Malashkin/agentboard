@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one repository stay distinguishable.
 
 ### Fixed
+- **The board asked for answers nobody had asked for.** Claude Code sends the `Notification` hook
+  both for a real block and as a nudge about a minute after a turn ends ("Claude is waiting for
+  your input"). Every one of them was turned into *waiting for you*, and because the nudge arrives
+  **after** `Stop` — which sets idle — and an agent sitting at its prompt produces no further
+  hooks, the card stayed that way for good. On one machine five agents claimed to need a reply
+  while they were done. A notification is now only a block when something is actually pending for
+  that agent, or when its wording isn't the nudge (which keeps the signal where in-app permissions
+  are off and `PermissionRequest` never ran). The nudge is still recorded in the feed.
 - "Couldn't find the terminal" now names every supported terminal and says when herdr is installed
   but doesn't manage that session — the old wording sent people looking for tabs they never had.
 
