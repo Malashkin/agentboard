@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Hooks
@@ -19,7 +19,8 @@ updated: 2026-11-09
 | `git-pre-commit` | — | `POST /hook/git-precommit` (`application/octet-stream`: root + staged files, one per line); non-empty answer → message on stderr, exit 1 |
 
 The bridge reads the port from the `port` file next to its own `bin/` folder (`~/.agentboard/port`, or
-`$AGENTBOARD_BRIDGE_DIR/port` for an isolated instance), so a test instance's hooks never reach the real app.
+`$AGENTBOARD_BRIDGE_DIR/port` for an isolated instance), so a test instance's hooks never reach the real app. Every call sends the install's token with
+`curl -H @"$BASE/auth-header"` (0600 file written by the app), so the token is never on a command line.
 If the app is unreachable the bridge exits 0 with no output. `AGENTBOARD_INTERNAL=1` (set for the app's
 own child processes) disables it.
 

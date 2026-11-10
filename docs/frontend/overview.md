@@ -1,7 +1,7 @@
 ---
 audience: frontend
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Frontend overview
@@ -33,6 +33,17 @@ These fixed visible flicker and lost input in the past:
 5. **Cards don't change height** when text changes (`lineLimit(n, reservesSpace: true)`).
 6. Numbers use `.smoothNumber(value)` (numeric content transition).
 7. Agent cards are ordered by session start, not by activity — they must not jump under the cursor.
+
+## Performance rules
+
+1. **Ambient motion runs in Core Animation**, never as a SwiftUI `repeatForever` animation or `symbolEffect` loop:
+   those re-run layout of the whole window each frame (measured ~30% CPU with a few working agents).
+   `PulseDot` uses a `CALayer` animation group (`Theme.swift`).
+2. **The clock ticks slowly.** `Store.now` (relative times, idle detection) updates every 15 s and not while the app
+   is hidden or fully covered (`AppVisibility`); it catches up when a window shows again.
+3. **Background polling follows visibility.** `GitMonitor` runs `git status` every 15 s while a window is visible,
+   once a minute otherwise.
+4. **Links in agent/model Markdown are not clickable** (`MarkdownView.unlinked`) — the address is shown as text.
 
 ## Theming
 

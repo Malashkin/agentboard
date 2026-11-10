@@ -1,7 +1,7 @@
 ---
 audience: devops
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Configuration
@@ -10,7 +10,8 @@ updated: 2026-11-09
 
 | Key | Default | Description |
 |---|---|---|
-| `port` | 7777 | Local server port (re-register MCP after changing) |
+| `port` | 7777 | Local server port (MCP registrations are refreshed at the next launch) |
+| `scriptingAPI` | false | Allow `/api/decide`, `/api/tasks`, `/api/tasks/launch` (Settings → General → Allow scripts to act for me) |
 | `commitMode` | `notify` | `off` · `notify` · `approve` |
 | `approvalTimeout` | 300 s | Wait for a commit decision, then fall back to the terminal |
 | `permissionTimeout` | 900 s | How long a permission request waits in the app |
@@ -52,7 +53,9 @@ updated: 2026-11-09
 | Path | Content |
 |---|---|
 | `~/Library/Application Support/AgentBoard/agentboard.sqlite` | All data |
+| `~/.agentboard/` | Owner-only folder (0700) |
 | `~/.agentboard/bin/agentboard-hook`, `~/.agentboard/port` | Bridge |
-| `~/.agentboard/prompts/task-N.txt` | Prompts of launched tasks |
+| `~/.agentboard/token`, `~/.agentboard/auth-header` | The install's API token and the curl header line (0600) — see [ADR-007](../architecture/decisions/007-per-install-token.md) |
+| `~/.agentboard/prompts/task-N.txt` | Prompt of a task being launched (0600, deleted once the agent has read it) |
 | `~/.agentboard/worktrees/` | Task worktrees |
 | `~/Documents/AgentBoard/YYYY-MM-DD.md` | Exported summaries |

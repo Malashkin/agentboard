@@ -42,6 +42,7 @@ enum Pref {
     static let awayMinutes = "awayMinutes"
     static let narratorMinutes = "narratorMinutes"
     static let narratorModel = "narratorModel"
+    static let scriptingAPI = "scriptingAPI"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -73,6 +74,7 @@ enum Pref {
             awayMinutes: 20.0,
             narratorMinutes: 2.0,
             narratorModel: "haiku",
+            scriptingAPI: false,
         ])
     }
 }
@@ -106,6 +108,8 @@ enum AppSettings {
     static var awayMinutes: Double { max(5, d.double(forKey: Pref.awayMinutes)) }
     static var narratorMinutes: Double { max(0.5, d.double(forKey: Pref.narratorMinutes)) }
     static var narratorModel: String { (d.string(forKey: Pref.narratorModel) ?? "").trimmed.isEmpty ? "haiku" : d.string(forKey: Pref.narratorModel)!.trimmed }
+    /// /api/decide, /api/tasks, /api/tasks/launch (still need the token).
+    static var scriptingAPI: Bool { d.bool(forKey: Pref.scriptingAPI) }
     static var worktreeRoot: String {
         if let e = ProcessInfo.processInfo.environment["AGENTBOARD_WORKTREE_ROOT"], !e.isEmpty { return e }
         let v = d.string(forKey: Pref.worktreeRoot) ?? ""

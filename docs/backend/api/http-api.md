@@ -1,13 +1,18 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Local JSON API
 
 Scripting interface used by the self-test and for automation. Same rules as the rest of the server
-(see [overview.md](overview.md)).
+(see [overview.md](overview.md)): every call needs the token; *Decide*, *Create a task* and *Launch* also need
+*Settings → General → Allow scripts to act for me* (otherwise 403).
+
+```bash
+curl -s -H @"$HOME/.agentboard/auth-header" http://127.0.0.1:7777/api/board
+```
 
 ### Board
 

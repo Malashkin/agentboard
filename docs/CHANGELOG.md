@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Changelog
@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Rename a project (shown name only) and remove it from the sidebar — keeping its history so re-adding the folder restores tasks, feed and notes, or deleting it; right-click a project in the sidebar.
 - Role-based documentation in `docs/` (AGENTS.md entry point, product, architecture with ADRs, backend API, frontend, devops, testing, security, monitoring).
 - Local JSON API to create tasks and launch an agent on a task (`POST /api/tasks`, `POST /api/tasks/launch`).
 - Automatic board tasks from agents' requests, with titles by a small model; new topic → previous task to review; session end → review.
@@ -24,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 189 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 262 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Import of past Claude Code / Codex sessions and git commits when a project is added; last-work date in the sidebar.
 
 ### Changed
+- Lower CPU use: the pulsing "working" dot is a Core Animation layer animation (a SwiftUI repeat-forever animation re-laid out the whole window every frame, ~30% CPU); relative times refresh every 15 s and not while the window is hidden; git status is polled once a minute while no window is visible.
 - The whole app, agent-facing texts and model prompts are in English; Russian input from the human is still understood.
 - Agent names are English superhero names, unique across all open sessions (existing names migrated).
 - Sessions started outside a project folder are attributed by the files they work on.
@@ -62,7 +64,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Messages are typed into a terminal only when the agent is its foreground process; terminal names from hooks are validated (audit M3).
 - Isolated runs can no longer edit the real Claude Code / Codex configuration (installers honour `CLAUDE_CONFIG_DIR` / `CODEX_HOME`).
 - Requests whose `Host` is not local are refused (DNS rebinding).
-- Known open issues from the 2026-11-09 audit are tracked in [security/overview.md](security/overview.md).
+- The local server requires a per-install token (`~/.agentboard/token`) on every route except `/health`; the hook bridge and the MCP registrations of Claude Code / Codex send it, and older registrations are refreshed at launch (audit H2, [ADR-007](architecture/decisions/007-per-install-token.md)). **Restart open agent sessions once after updating.**
+- MCP callers are identified only by their exact `agent_id` — a name is no longer enough to act as an agent; anonymous callers can't send messages (audit H2/M2).
+- `/api/decide`, `/api/tasks` and `/api/tasks/launch` are off unless *Settings → General → Allow scripts to act for me* is on (audit H2).
+- Messages from other agents are delivered as fenced, labelled peer information, separate from the human's; agent-written text can't fake the `[AgentBoard]` marker; self-chosen agent names are validated (audit M2).
+- `~/.agentboard` is owner-only; task prompt files are 0600 and deleted after launch (audit L1).
+- Links in agent/model Markdown are shown with their address and are not clickable (audit L2).
+- Server limits: 8 MB per request, 256 connections, 30 s to send a request (audit L3).
+- All findings of the 2026-11-09 audit are fixed — see [security/overview.md](security/overview.md).
 
 ## [1.0.0] - 2026-11-07
 

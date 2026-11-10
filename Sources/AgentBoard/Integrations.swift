@@ -26,23 +26,25 @@ enum Integrations {
     BASE=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
     PORT=$(cat "$BASE/port" 2>/dev/null || echo 7777)
     URL="http://127.0.0.1:$PORT"
+    # The install's token, as a ready header line (0600 file; read by curl so it never appears in `ps`).
+    AUTH="$BASE/auth-header"
     case "$1" in
       claude)
         # stdin: hook JSON from Claude Code; stdout: optional hook response JSON.
         # The controlling terminal lets AgentBoard type comments into this session's tab.
         TTY=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
-        curl -sf --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
+        curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
           --data-binary @- "$URL/hook/claude?tty=$TTY" 2>/dev/null
         ;;
       codex-hook)
         # Codex hooks (~/.codex/hooks.json) use Claude Code's format: same handler, marked as Codex.
         TTY=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
-        curl -sf --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
+        curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
           --data-binary @- "$URL/hook/claude?tool=codex&tty=$TTY" 2>/dev/null
         ;;
       codex)
         # Codex `notify` passes the event JSON as the last argument.
-        printf '%s' "${@: -1}" | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
+        printf '%s' "${@: -1}" | curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 5 -X POST \\
           -H 'Content-Type: application/json' --data-binary @- "$URL/hook/codex" >/dev/null 2>&1
         ;;
       git-pre-commit)
@@ -50,7 +52,7 @@ enum Integrations {
         top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
         files=$(git diff --cached --name-only 2>/dev/null)
         [ -z "$files" ] && exit 0
-        resp=$( { printf '%s\n' "$top"; printf '%s\n' "$files"; } | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
+        resp=$( { printf '%s\n' "$top"; printf '%s\n' "$files"; } | curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 5 -X POST \\
           -H 'Content-Type: application/octet-stream' --data-binary @- "$URL/hook/git-precommit" 2>/dev/null)
         if [ -n "$resp" ]; then printf '%s\n' "$resp" >&2; exit 1; fi
         ;;
@@ -59,7 +61,7 @@ enum Integrations {
         hash=$(git rev-parse HEAD 2>/dev/null) || exit 0
         esc() { printf '%s' "$1" | sed -e 's/\\\\/\\\\\\\\/g' -e 's/"/\\\\"/g'; }
         body=$(printf '{"cwd":"%s","hash":"%s"}' "$(esc "$top")" "$hash")
-        ( printf '%s' "$body" | curl -sf --connect-timeout 1 --max-time 5 -X POST \\
+        ( printf '%s' "$body" | curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 5 -X POST \\
             -H 'Content-Type: application/json' --data-binary @- "$URL/hook/git" >/dev/null 2>&1 & )
         ;;
     esac
@@ -70,6 +72,8 @@ enum Integrations {
     /// Called at launch: keeps the script and the port file current.
     static func writeBridge() {
         let fm = FileManager.default
+        Auth.secureBaseDir()
+        _ = Auth.token   // creates token + auth-header on first launch
         try? fm.createDirectory(atPath: baseDir + "/bin", withIntermediateDirectories: true)
         try? hookScript.write(toFile: hookPath, atomically: true, encoding: .utf8)
         try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hookPath)
@@ -168,18 +172,30 @@ enum Integrations {
 
     // MARK: Claude Code MCP
 
-    static func claudeMCPInstalled() -> Bool {
-        guard let j = readJSON(home + "/.claude.json") else { return false }
-        if let servers = j["mcpServers"] as? JSON, servers["agentboard"] != nil { return true }
-        return false
+    /// Claude Code keeps user-scope MCP servers in ~/.claude.json (inside CLAUDE_CONFIG_DIR when that is set).
+    static var claudeJSON: String { env("CLAUDE_CONFIG_DIR").map { $0 + "/.claude.json" } ?? home + "/.claude.json" }
+    static var bearer: String { "Bearer " + Auth.token }
+
+    private static var claudeMCPEntry: JSON? {
+        (readJSON(claudeJSON)?["mcpServers"] as? JSON)?["agentboard"] as? JSON
     }
+
+    /// Registered, with the current URL and token.
+    static func claudeMCPInstalled() -> Bool {
+        guard let e = claudeMCPEntry else { return false }
+        return e.s("url") == mcpURL && (e["headers"] as? JSON)?.s("Authorization") == bearer
+    }
+
+    /// Registered by an older version (no token) or for another port: re-register at launch so MCP keeps working.
+    static func claudeMCPNeedsRefresh() -> Bool { claudeMCPEntry != nil && !claudeMCPInstalled() }
 
     static func installClaudeMCP() throws {
         guard let claude = Shell.which("claude") else {
             throw NSError(domain: "AgentBoard", code: 3, userInfo: [NSLocalizedDescriptionKey: "claude CLI not found"])
         }
         _ = Shell.run(claude, ["mcp", "remove", "--scope", "user", "agentboard"], timeout: 30)
-        let r = Shell.run(claude, ["mcp", "add", "--scope", "user", "--transport", "http", "agentboard", mcpURL], timeout: 30)
+        let r = Shell.run(claude, ["mcp", "add", "--scope", "user", "--transport", "http", "agentboard", mcpURL,
+                                    "--header", "Authorization: " + bearer], timeout: 30)
         if !r.ok {
             throw NSError(domain: "AgentBoard", code: 4, userInfo: [NSLocalizedDescriptionKey: "claude mcp add: " + (r.err.isEmpty ? r.out : r.err)])
         }
@@ -199,7 +215,46 @@ enum Integrations {
 
     static func codexInstalled() -> Bool {
         guard let t = try? String(contentsOfFile: codexConfig) else { return false }
-        return t.contains("[mcp_servers.agentboard]") && codexHooksInstalled()
+        return t.contains(codexMCPSection) && codexHooksInstalled()
+    }
+
+    static func codexMCPNeedsRefresh() -> Bool {
+        guard let t = try? String(contentsOfFile: codexConfig) else { return false }
+        return t.contains("[mcp_servers.agentboard]") && !t.contains(codexMCPSection)
+    }
+
+    /// The MCP entry with the install's token (Codex sends `http_headers` on every request).
+    static var codexMCPSection: String {
+        "[mcp_servers.agentboard]\nurl = \"\(mcpURL)\"\nhttp_headers = { Authorization = \"\(bearer)\" }\n"
+    }
+
+    /// Replaces our [mcp_servers.agentboard] table (up to the next table header) and keeps everything else.
+    static func withCodexMCPSection(_ text: String) -> String {
+        var out: [String] = [], skipping = false
+        for line in text.components(separatedBy: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t == "[mcp_servers.agentboard]" { skipping = true; continue }
+            if skipping && t.hasPrefix("[") { skipping = false }
+            if !skipping { out.append(line) }
+        }
+        var kept = out.joined(separator: "\n")
+        while kept.hasSuffix("\n\n") { kept.removeLast() }
+        return kept + (kept.isEmpty ? "" : (kept.hasSuffix("\n") ? "\n" : "\n\n")) + codexMCPSection
+    }
+
+    /// Called at launch: older installs registered MCP without the token.
+    static func refreshMCPRegistrations() {
+        if claudeMCPNeedsRefresh() { try? installClaudeMCP() }
+        if codexMCPNeedsRefresh() {
+            backup(codexConfig)
+            if let t = try? String(contentsOfFile: codexConfig) { writeCodexConfig(withCodexMCPSection(t)) }
+        }
+    }
+
+    /// config.toml now holds the token: owner-only.
+    private static func writeCodexConfig(_ text: String) {
+        try? text.write(toFile: codexConfig, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: codexConfig)
     }
 
     static var codexHooks: String { codexDir + "/hooks.json" }
@@ -233,17 +288,14 @@ enum Integrations {
         try FileManager.default.createDirectory(atPath: codexDir, withIntermediateDirectories: true)
         try installCodexHooks()
         backup(codexConfig)
-        var text = (try? String(contentsOfFile: codexConfig)) ?? ""
-        if !text.contains("[mcp_servers.agentboard]") {
-            text += (text.hasSuffix("\n") || text.isEmpty ? "" : "\n")
-                + "\n[mcp_servers.agentboard]\nurl = \"\(mcpURL)\"\n"
-        }
+        var text = withCodexMCPSection((try? String(contentsOfFile: codexConfig)) ?? "")
         // `notify` is a top-level key; only add it when the user doesn't already have one.
         let hasNotify = text.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("notify") }
         if !hasNotify {
             text = "notify = [\"\(hookPath)\", \"codex\"]\n" + text
         }
         try text.write(toFile: codexConfig, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: codexConfig)
     }
 
     // MARK: Git hooks (per project)

@@ -117,10 +117,23 @@ extension Core {
         }
     }
 
+    /// M2: a name an agent may choose for itself — short, plain, and impossible to confuse with the human or the app.
+    static func acceptableAgentName(_ raw: String) -> String? {
+        let n = raw.trimmed
+        guard (1...40).contains(n.count),
+              n.range(of: #"^[\p{L}\p{N}][\p{L}\p{N} ._-]*$"#, options: .regularExpression) != nil else { return nil }
+        let l = n.lowercased()
+        for bad in ["human", "agentboard", "user", "system", "admin", "dashboard", "you"]
+        where l == bad || l.split(whereSeparator: { " ._-".contains($0) }).contains(Substring(bad)) { return nil }
+        return n
+    }
+
     private func callTool(_ name: String, _ args: JSON) -> (String, Bool) {
         // Who is calling?
         var me: Agent?
-        if let aid = args.str("agent_id") { me = findAgent(aid, project: nil) }
+        // The caller is identified only by its exact agent_id (H2): names are public and handed out in a fixed
+        // order, so "Batman" must never be enough to act as Batman. Names stay valid as *targets* (send_message, agent_activity).
+        if let aid = args.str("agent_id") { me = agent(id: aid.trimmed) }
         if me == nil { me = agentForMCPCall(tool: name, args: args) }
         var project: Project? = me.flatMap { self.project(id: $0.projectId) }
         if project == nil, let p = args.str("project_path") ?? args.str("cwd") { project = projectFor(cwd: p) }
@@ -143,7 +156,7 @@ extension Core {
                         + boardText(project: p, me: existing, includeRules: true), false)
             }
             let a = touchAgent(tool: tool, sessionId: "mcp-" + UUID().uuidString, project: p, cwd: cwd.isEmpty ? p.path : cwd,
-                               transcript: nil, revive: true, name: args.str("name"))
+                               transcript: nil, revive: true, name: args.str("name").flatMap(Self.acceptableAgentName))
             setAgent(a.id, ["status": "working", "last_action": "registered"])
             addEvent(project: p.id, agent: a.id, kind: "session_start", title: "\(a.name) connected (\(a.toolLabel))", detail: cwd)
             return ("Your agent_id: \(a.id) (name \"\(a.name)\"). Pass it in every agentboard call.\n\n"
@@ -248,6 +261,8 @@ extension Core {
             return done("Focus recorded." + (warnings.isEmpty ? "" : "\nHeads up, possible overlaps:\n" + warnings.joined(separator: "\n")))
 
         case "send_message":
+            // Anonymous senders would be shown as the human (M2): only an identified agent may send.
+            guard let me else { return done("I don't know who you are. Pass agent_id (register_agent).", true) }
             guard let text = args.str("text") else { return done("text is required", true) }
             let to = args.s("to")
             if to.isEmpty || ["all", "все", "всем", "*"].contains(to.lowercased()) {

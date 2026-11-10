@@ -110,9 +110,27 @@ struct MarkdownView: View {
 
     private func inline(_ s: String) -> Text {
         if let a = try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-            return Text(a)
+            return Text(Self.unlinked(a))
         }
         return Text(s)
+    }
+
+    /// L2: plans and summaries are written by agents/models that may have read injected content, so links are not
+    /// clickable; the real address is shown next to the link text ("text (https://…)") and can be copied.
+    static func unlinked(_ a: AttributedString) -> AttributedString {
+        var out = AttributedString()
+        for run in a.runs {
+            var piece = AttributedString(a[run.range])
+            if let url = run.link {
+                piece.link = nil
+                piece.underlineStyle = .single
+                out.append(piece)
+                if String(piece.characters) != url.absoluteString { out.append(AttributedString(" (\(url.absoluteString))")) }
+            } else {
+                out.append(piece)
+            }
+        }
+        return out
     }
 
     var body: some View {

@@ -1,7 +1,7 @@
 ---
 audience: product
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Roadmap
@@ -9,10 +9,11 @@ updated: 2026-11-09
 | Item | Status | Priority |
 |---|---|---|
 | Security hardening: refuse Origin, non-simple POSTs only (audit H1) | Done | P0 |
-| Per-install token for hooks / MCP / API; ids-only agent identity (audit H2) | Planned | P0 |
+| Per-install token for hooks / MCP / API; ids-only agent identity (audit H2) | Done | P0 |
 | Evening summary run without tools (audit M1) | Done | P1 |
 | Foreground check before typing into a terminal (audit M3) | Done | P1 |
-| Peer messages framed as untrusted; validated agent names (audit M2) | Planned | P1 |
+| Peer messages framed as untrusted; validated agent names (audit M2) | Done | P1 |
+| Private `~/.agentboard`, non-clickable agent links, server limits (audit L1–L3) | Done | P2 |
 | Auto-trust task worktrees of already trusted repositories (opt-in) | Idea | P2 |
 | Proper singular/plural in English counters | Idea | P3 |
 | Signed and notarized builds, auto-update | Idea | P3 |

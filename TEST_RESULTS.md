@@ -1,11 +1,47 @@
 # Test Results
 
-**Date:**     2026-11-09 19:20 (security fixes H1/M1/M3 added on top of the 18:49 run)
-**Commit:**   255e56e + working tree (tests and fixes from this run)
+**Date:**     2026-11-10 09:40 (security audit closed: H2, M2, L1–L3; projects rename/remove; CPU fix)
+**Commit:**   c602b06 + working tree
 **Stack:**    Swift 5.9 / SwiftPM · runner: `./scripts/test.sh` (`AgentBoard --self-test`; XCTest unavailable without Xcode — ADR-006)
 **App type:** native macOS desktop app with a local HTTP / MCP API (no web UI → no browser e2e)
 **Shape:**    integration-heavy (Testing Trophy): most risk lives in the wiring between hooks, the server, the DB, git and the filesystem
 **Status:**   🟢 PASS
+
+## This run
+- New suites: `hardeningSuite` (MCP identity by id, self-chosen names, token/prompt file permissions, launch command,
+  MCP registrations with the token, **server limits on a real socket**) and `projectsSuite` (rename, remove keeping
+  history, restore by re-adding, remove and delete). New unit and contract sections for H2/M2/L2.
+- Regression for H2: the audit PoC (`"agent_id": "Batman"`) is refused both without a token (401) and, with the token,
+  by name (`don't know who you are`); verified live against the installed app (401 / 200 with token / 403 scripting off / 413).
+
+| Layer | Tests | Passed | Failed |
+|---|---|---|---|
+| Unit | 99 | 99 | 0 |
+| Contract | 41 | 41 | 0 |
+| Integration | 122 | 122 | 0 |
+| E2E (browser) | N/A — not a web UI; the end-to-end commit through the real bridge (now sending the token) + git is in Integration | | |
+
+## Mutation gate (headline signal)
+
+| Metric | Value |
+|---|---|
+| Mutants | 39 (19 `[sec]`: each re-introduces an audit finding; 2 for projects) |
+| Killed | 39 |
+| Score | 100% |
+
+- Survivor found and fixed: **"[sec] H2 token compare is a prefix match"** — the wrong-token test used a reversed token,
+  never a prefix of the real one. Added "a truncated token (a prefix of the real one) → 401"; killed.
+- Script fix: mutants in `Views/` need the subfolder in their path.
+
+## Not covered by automated tests
+- Removing the foreground check at its call site in `typeIntoTerminal` (needs a real terminal).
+- CPU use of the UI (measured by hand: before ~25–31% CPU, ~740 idle wake-ups/s with a working agent and the
+  window open; after 0–7%, ~5 wake-ups/s).
+- The Settings toggle and sidebar menus (SwiftUI; checked by building and by hand).
+
+---
+
+# Previous run (2026-11-09)
 
 ## Changed files
 - `Sources/AgentBoard/SelfTest.swift` — per-layer accounting, new checks

@@ -265,6 +265,7 @@ struct ProjectSettingsView: View {
         Form {
             Section("Project") {
                 TextField("Name", text: $name)
+                Text("Shown in AgentBoard only; the folder keeps its name. Empty → folder name.").font(.caption).foregroundStyle(.secondary)
                 TextField("Default client", text: $client)
                 Text("The client is prefilled in new tasks and helps group the summary by client.").font(.caption).foregroundStyle(.secondary)
                 Button("Save") { store.updateProject(project.id, name: name, client: client) }
@@ -316,12 +317,16 @@ struct ProjectSettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { name = project.name; client = project.client; refresh() }
-        .confirmationDialog("Remove “\(project.name)” from AgentBoard?", isPresented: $confirmDelete) {
-            Button("Remove", role: .destructive) {
+        .confirmationDialog("Remove “\(project.name)” from AgentBoard?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Remove, keep its history") {
+                Integrations.uninstallGitHook(project)
+                store.archiveProject(project.id)
+            }
+            Button("Remove and delete its history", role: .destructive) {
                 Integrations.uninstallGitHook(project)
                 store.removeProject(project.id)
             }
-        } message: { Text("The project's agent history, tasks and feed will be deleted. Project files are not touched.") }
+        } message: { Text("Project files are not touched. Keep history: adding the same folder again brings back its tasks, feed and notes.") }
         .alert("Error", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") {}
         } message: { Text(message ?? "") }

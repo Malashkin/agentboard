@@ -93,7 +93,10 @@ AgentBoard sits next to your agents and turns all of that into one live board.
   app and to `~/Documents/AgentBoard/YYYY-MM-DD.md`.
 
 ### Make it yours
-- 8 color schemes, custom accent, light/dark, density, card style, animations.
+- Rename projects as you like (right-click in the sidebar) and remove the ones you don't work on —
+  adding the same folder again brings back its tasks and history.
+- 8 color schemes, custom accent, light/dark, density, card style, animations. Light on resources:
+  ~0% CPU while idle.
 - Dashboards built from widgets — stats, decisions, agents, feed, tasks, time, reservations,
   commits, clients, hot files, latest summary — that you drag around, resize and hide.
 
@@ -147,7 +150,10 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 
 - Everything is stored locally: `~/Library/Application Support/AgentBoard` (SQLite). Detailed
   actions are kept 90 days; requests, answers, commits, notes and summaries are kept.
-- The server listens on `127.0.0.1` only and refuses requests coming from web pages.
+- The server listens on `127.0.0.1` only, refuses requests coming from web pages and requires a
+  per-install token (`~/.agentboard/token`, owner-only) on every request — other users and apps on the
+  Mac can't read the board or act as an agent. Messages between agents are handed over as information,
+  never as the human's instructions.
 - The plain-language status lines, task titles, "while you were away" and the evening summary are
   written by `claude -p` with your Claude Code login (no tools, no saved session) — so agent
   activity is sent to Anthropic, the same provider your agents already use. All of them can be
@@ -158,7 +164,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 189 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 262 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

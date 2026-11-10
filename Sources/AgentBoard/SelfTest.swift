@@ -238,7 +238,7 @@ enum SelfTest {
             core.q.sync { core.route(req) { status = $0.status } }
             return status
         }
-        check(route("GET", "/api/board", ["host": "127.0.0.1:7777"]) == 200, "local requests are served")
+        check(route("GET", "/api/board", ["host": "127.0.0.1:7777", "x-agentboard-token": Auth.token]) == 200, "local requests with the token are served")
         check(route("GET", "/api/board", ["host": "evil.example:7777"]) == 403, "DNS-rebinding host is refused")
         check(route("POST", "/api/decide", ["host": "127.0.0.1:7777", "origin": "https://evil.example", "content-type": "application/json"]) == 403,
               "cross-site POST is refused")
@@ -246,6 +246,8 @@ enum SelfTest {
         contractSuite(core: core, project: project)
         integrationSuite(core: core, project: project, repo: repo, root: root)
         gapSuite(core: core, project: project, repo: repo, root: root)
+        hardeningSuite(core: core, project: project, repo: repo, root: root)
+        projectsSuite(core: core, root: root)
 
         print("")
         for l in ["unit", "contract", "integration"] {

@@ -1,7 +1,7 @@
 ---
 audience: product
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Features
@@ -16,7 +16,9 @@ updated: 2026-11-09
 - **Subagents** shown as lanes under their agent, with description and result.
 - **Live session status** from Claude Code's own session files (closed terminal → finished).
 - **History** of any day, including sessions and commits from before AgentBoard was installed (imported).
-- **Sidebar** shows the date of the last work per project.
+- **Sidebar** shows the date of the last work per project. Right-click a project → *Rename…* (name shown in
+  AgentBoard only), *Open in Finder*, *Remove from AgentBoard…* — keep its history (adding the folder again
+  restores tasks, feed, notes) or delete it.
 
 ## Answering agents
 - **Needs your decision** — permission requests (Allow · Deny with comment · Allow for this session),

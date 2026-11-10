@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 applies-to: d4917f9
 ---
 
@@ -41,7 +41,7 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 | Build (release) | `swift build -c release` |
 | Build the .app bundle | `./scripts/build-app.sh` → `dist/AgentBoard.app` |
 | Build + install to /Applications | `./scripts/build-app.sh --install` |
-| Test (self-test, 189 checks) | `./scripts/test.sh` (or `.build/release/AgentBoard --self-test`) |
+| Test (self-test, 262 checks) | `./scripts/test.sh` (or `.build/release/AgentBoard --self-test`) |
 | Mutation gate | `scripts/mutation-check.py /tmp/agentboard-mutants` |
 | Run a debug instance | `.build/debug/AgentBoard -port 7788` |
 | Run fully isolated | `AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788` |
@@ -85,7 +85,12 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 - **SwiftUI identity:** default dashboard layouts must keep stable widget ids, and snapshots must not be applied inside a global animation — both caused flicker and lost input before (see [frontend/overview.md](frontend/overview.md)).
 - **Paths:** compare repository roots via `git rev-parse --show-toplevel` (`Core.repoRoot`) — `/var/…` vs `/private/var/…` and moved folders otherwise break matching.
 - **Claude's session files** store `procStart` in UTC (`SessionLiveness.isAlive` handles both).
-- Changing the port requires re-registering the MCP server (Integrations → Connect).
+- **Token (ADR-007).** Every request except `GET /health` needs `~/.agentboard/token` (`X-AgentBoard-Token` or
+  `Authorization: Bearer`). For curl: `curl -H @"$HOME/.agentboard/auth-header" http://127.0.0.1:7777/api/board`.
+  After an update that changes the MCP registration (token, port), restart agent sessions — until then their MCP calls get 401.
+- **Agent identity** in MCP is the exact `agent_id`, never a name.
+- **No SwiftUI `repeatForever` animations for ambient effects** — they re-lay out the whole window every frame.
+  Use a Core Animation layer (see `PulseDot` in `Theme.swift`).
 - **Isolated runs:** set `AGENTBOARD_DATA_DIR`, `AGENTBOARD_BRIDGE_DIR`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` together —
   the bridge then uses its own port file and installers edit only the test folders.
-- The self-test starts a real HTTP server on a spare port (27700–27759) and runs real `git commit`s in a temp repo.
+- The self-test starts real HTTP servers on spare ports (27700–27759 end to end, 27760–27799 server limits) and runs real `git commit`s in a temp repo.

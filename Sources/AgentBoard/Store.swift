@@ -33,7 +33,12 @@ final class Store: ObservableObject {
     private var ticker: AnyCancellable?
 
     init() {
-        ticker = Timer.publish(every: 5, on: .main, in: .common).autoconnect().sink { [weak self] d in self?.now = d }
+        // Refreshes relative times ("2 min ago") and idle detection. Every change of `now` re-renders the window,
+        // so: every 15 s, and not at all while the app is hidden or fully covered (caught up when it shows again).
+        ticker = Timer.publish(every: 15, on: .main, in: .common).autoconnect().sink { [weak self] d in
+            if AppVisibility.isVisible { self?.now = d }
+        }
+        AppVisibility.onShow = { [weak self] in self?.now = Date(); GitMonitor.shared.refreshNow() }
     }
 
     var staleMinutes: Double { AppSettings.staleMinutes }
@@ -166,6 +171,9 @@ final class Store: ObservableObject {
     }
     func updateProject(_ id: String, name: String, client: String) { core { $0.updateProject(id: id, name: name, client: client) } }
     func removeProject(_ id: String) { core { $0.removeProject(id: id) } }
+    func renameProject(_ id: String, _ name: String) { core { $0.renameProject(id: id, to: name) } }
+    /// Off the sidebar, data kept; "Add project" with the same folder brings it back.
+    func archiveProject(_ id: String) { core { $0.archiveProject(id: id) } }
 
     func createTask(project: String, title: String, details: String, client: String, status: TaskStatus, assignee: String?) {
         core { $0.createTask(project: project, title: title, details: details, client: client, status: status, assignee: assignee, createdBy: "user") }
@@ -239,5 +247,28 @@ final class Store: ObservableObject {
             }
             objectWillChange.send()
         }
+    }
+}
+
+/// Whether any AgentBoard window is on screen. Background work slows down when it isn't.
+enum AppVisibility {
+    private static let lock = NSLock()
+    private static var visible = true
+    static var onShow: (() -> Void)?
+    private static var observer: NSObjectProtocol?
+
+    static var isVisible: Bool { lock.lock(); defer { lock.unlock() }; return visible }
+
+    /// Call once on the main thread at launch.
+    static func start() {
+        observer = NotificationCenter.default.addObserver(forName: NSApplication.didChangeOcclusionStateNotification,
+                                                          object: nil, queue: .main) { _ in update() }
+        update()
+    }
+
+    private static func update() {
+        let now = NSApp.occlusionState.contains(.visible)
+        lock.lock(); let was = visible; visible = now; lock.unlock()
+        if now && !was { onShow?() }
     }
 }

@@ -216,6 +216,7 @@ struct SettingsView: View {
     @AppStorage(Pref.awayMinutes) private var awayMinutes = 20.0
     @AppStorage(Pref.narratorMinutes) private var narratorMinutes = 2.0
     @AppStorage(Pref.narratorModel) private var narratorModel = "haiku"
+    @AppStorage(Pref.scriptingAPI) private var scriptingAPI = false
 
     var body: some View {
         TabView {
@@ -227,6 +228,9 @@ struct SettingsView: View {
                 Stepper("Mark agent idle after \(Int(staleMinutes)) min of silence", value: $staleMinutes, in: 5...240, step: 5)
                 TextField("Local server port", value: $port, format: .number.grouping(.never))
                 Text("After changing the port, restart the app and reconnect MCP in Integrations.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Allow scripts to act for me (approve requests, create and launch tasks)", isOn: $scriptingAPI)
+                Text("Local API: /api/decide, /api/tasks, /api/tasks/launch. Requests must carry the token from ~/.agentboard/token. Leave off unless you script AgentBoard — any program with the token could then approve agents' actions.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .tabItem { Label("General", systemImage: "gearshape") }

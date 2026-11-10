@@ -84,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Integrations.writeBridge()
         startServer()
+        AppVisibility.start()
 
         GitMonitor.shared.onUpdate = { snap in if store.git != snap { ThemeStore.animate { store.git = snap } } }
         GitMonitor.shared.start()
@@ -94,6 +95,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep each project's git hooks current (pre-commit guard added in newer versions, moved folders).
         DispatchQueue.global(qos: .utility).async {
             for p in core.q.sync(execute: { core.allProjects() }) { try? Integrations.installGitHook(p) }
+            // MCP registrations from older versions have no token (or an old port) → re-register.
+            Integrations.refreshMCPRegistrations()
         }
 
         // Debug aid: AGENTBOARD_SNAPSHOT=/path.png saves an image of the main window (no screen-recording permission needed).

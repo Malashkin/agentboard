@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Architecture decisions
@@ -14,3 +14,4 @@ updated: 2026-11-09
 | [004](004-claude-p-for-model-features.md) | `claude -p` (no tools) for plain-language features | Accepted |
 | [005](005-advisory-reservations-with-git-guard.md) | Advisory file reservations enforced by hooks and git pre-commit | Accepted |
 | [006](006-built-in-self-test.md) | Built-in `--self-test` instead of XCTest | Accepted |
+| [007](007-per-install-token.md) | Per-install token for the local server, identity by agent id | Accepted |

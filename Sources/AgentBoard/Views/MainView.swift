@@ -11,6 +11,9 @@ struct MainView: View {
     @ObservedObject private var theme = ThemeStore.shared
     @State private var selection: NavItem? = .overview
     @State private var addError: String?
+    @State private var renaming: Project?
+    @State private var newName = ""
+    @State private var removing: Project?
 
     var body: some View {
         NavigationSplitView {
@@ -48,11 +51,37 @@ struct MainView: View {
                             }
                         }
                         .tag(NavItem.project(p.id))
+                        .contextMenu {
+                            Button("Rename…") { newName = p.name; renaming = p }
+                            Button("Open in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p.path)]) }
+                            Divider()
+                            Button("Remove from AgentBoard…", role: .destructive) { removing = p }
+                        }
                     }
                     .onMove { store.moveProjects(from: $0, to: $1) }
                 }
             }
             .navigationSplitViewColumnWidth(min: 210, ideal: 240)
+            .alert("Rename project", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Name", text: $newName)
+                Button("Rename") { if let p = renaming { store.renameProject(p.id, newName) }; renaming = nil }
+                Button("Cancel", role: .cancel) { renaming = nil }
+            } message: {
+                Text("Only how it's called in AgentBoard — the folder isn't renamed. Leave empty to use the folder name (\(renaming.map { URL(fileURLWithPath: $0.path).lastPathComponent } ?? "")).")
+            }
+            .confirmationDialog("Remove “\(removing?.name ?? "")” from AgentBoard?",
+                                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                                titleVisibility: .visible) {
+                Button("Remove, keep its history") {
+                    if let p = removing { removeProject(p, keepHistory: true) }
+                }
+                Button("Remove and delete its history", role: .destructive) {
+                    if let p = removing { removeProject(p, keepHistory: false) }
+                }
+                Button("Cancel", role: .cancel) { removing = nil }
+            } message: {
+                Text("The project disappears from the sidebar and AgentBoard stops tracking it. Project files are not touched.\n\nKeep history: add the same folder again later and its tasks, feed, notes and time come back.\nDelete: everything recorded is erased; re-adding imports only what Claude Code / Codex still keep (last 60 days) and git commits.")
+            }
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Button { addProject() } label: { Label("Add project", systemImage: "plus") }
@@ -106,6 +135,13 @@ struct MainView: View {
         if case .overview = selection ?? .overview { return true }
         if case .project = selection, UserDefaults.standard.integer(forKey: "projectTab") == 0 { return true }
         return false
+    }
+
+    func removeProject(_ p: Project, keepHistory: Bool) {
+        if case .project(let id) = selection ?? .overview, id == p.id { selection = .overview }
+        DispatchQueue.global(qos: .utility).async { Integrations.uninstallGitHook(p) }
+        if keepHistory { store.archiveProject(p.id) } else { store.removeProject(p.id) }
+        removing = nil
     }
 
     static func lastWorkLabel(_ t: Double, now: Date) -> String {

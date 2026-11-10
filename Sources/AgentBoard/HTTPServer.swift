@@ -30,8 +30,22 @@ final class HTTPServer {
     private let queue = DispatchQueue(label: "agentboard.http", attributes: .concurrent)
     var onState: ((Bool, String?) -> Void)?
 
-    init(port: Int, handler: @escaping Handler) {
+    // Limits (audit L3): any local process can connect, so memory and sockets are bounded.
+    /// Largest request (headers + body). Hook payloads with big tool output stay well under it.
+    let maxRequestBytes: Int
+    /// Hook requests waiting for a decision stay open (up to an hour), so this is generous.
+    let maxConnections: Int
+    /// A request must arrive completely within this time.
+    let readTimeout: Double
+    private let countLock = NSLock()
+    private var openConnections = 0
+
+    init(port: Int, maxRequestBytes: Int = 8 << 20, maxConnections: Int = 256, readTimeout: Double = 30,
+         handler: @escaping Handler) {
         self.port = UInt16(port)
+        self.maxRequestBytes = maxRequestBytes
+        self.maxConnections = maxConnections
+        self.readTimeout = readTimeout
         self.handler = handler
     }
 
@@ -55,17 +69,54 @@ final class HTTPServer {
 
     func stop() { listener?.cancel(); listener = nil }
 
-    private func accept(_ c: NWConnection) {
-        c.start(queue: queue)
-        receive(c, Data())
+    /// One per connection: makes sure the open-connection count is decremented exactly once.
+    private final class ConnState {
+        var closed = false
+        var gotRequest = false
+        let lock = NSLock()
     }
 
-    private func receive(_ c: NWConnection, _ buffer: Data) {
+    private func accept(_ c: NWConnection) {
+        countLock.lock()
+        if openConnections >= maxConnections {
+            countLock.unlock()
+            c.cancel()
+            return
+        }
+        openConnections += 1
+        countLock.unlock()
+        let st = ConnState()
+        c.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .cancelled, .failed:
+                st.lock.lock(); let first = !st.closed; st.closed = true; st.lock.unlock()
+                if first, let self { self.countLock.lock(); self.openConnections -= 1; self.countLock.unlock() }
+                if case .failed = state { c.cancel() }
+            default: break
+            }
+        }
+        c.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + readTimeout) {
+            st.lock.lock(); let idle = !st.gotRequest && !st.closed; st.lock.unlock()
+            if idle { c.cancel() }
+        }
+        receive(c, Data(), st)
+    }
+
+    var connectionCount: Int { countLock.lock(); defer { countLock.unlock() }; return openConnections }
+
+    private func receive(_ c: NWConnection, _ buffer: Data, _ st: ConnState) {
         c.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) { [weak self] data, _, isComplete, error in
             guard let self else { c.cancel(); return }
             var buf = buffer
             if let data { buf.append(data) }
+            if Self.declaredTooLarge(buf, limit: self.maxRequestBytes) || buf.count > self.maxRequestBytes {
+                st.lock.lock(); st.gotRequest = true; st.lock.unlock()
+                self.send(c, .json(["error": "request too large"], status: 413))
+                return
+            }
             if let req = Self.parse(buf) {
+                st.lock.lock(); st.gotRequest = true; st.lock.unlock()
                 var answered = false
                 let lock = NSLock()
                 self.handler(req) { resp in
@@ -76,17 +127,30 @@ final class HTTPServer {
                 }
                 return
             }
-            if isComplete || error != nil || buf.count > 32_000_000 {
+            if isComplete || error != nil {
                 c.cancel()
                 return
             }
-            self.receive(c, buf)
+            self.receive(c, buf, st)
         }
     }
 
+    /// Content-Length above the limit is refused as soon as the headers are in, before buffering the body.
+    static func declaredTooLarge(_ buf: Data, limit: Int) -> Bool {
+        guard let range = buf.range(of: Data("\r\n\r\n".utf8)) else { return false }
+        let head = String(decoding: buf[buf.startIndex..<range.lowerBound], as: UTF8.self).lowercased()
+        for line in head.components(separatedBy: "\r\n") where line.hasPrefix("content-length:") {
+            let v = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+            if let n = Int(v), n > limit { return true }
+            if Int(v) == nil { return true }   // overflow / garbage
+        }
+        return false
+    }
+
     private func send(_ c: NWConnection, _ r: HTTPResponse) {
-        let reason = [200: "OK", 202: "Accepted", 204: "No Content", 400: "Bad Request", 403: "Forbidden",
-                      404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"][r.status] ?? "OK"
+        let reason = [200: "OK", 202: "Accepted", 204: "No Content", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
+                      404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large", 415: "Unsupported Media Type",
+                      503: "Service Unavailable", 500: "Internal Server Error"][r.status] ?? "OK"
         var head = "HTTP/1.1 \(r.status) \(reason)\r\n"
         head += "Content-Type: \(r.contentType)\r\n"
         head += "Content-Length: \(r.body.count)\r\n"

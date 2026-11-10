@@ -14,8 +14,8 @@ struct AgentCard: View {
         Card(tint: st == .ended || st == .stale ? .clear : st.color) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
+                    // No symbolEffect pulse here: the status dot already pulses (cheaply, in Core Animation).
                     Image(systemName: agent.toolIcon).foregroundStyle(.secondary)
-                        .symbolEffect(.pulse, isActive: st == .working && ThemeStore.shared.animations)
                     Text(agent.name).font(.headline)
                     Pill(text: agent.toolLabel)
                     Spacer()

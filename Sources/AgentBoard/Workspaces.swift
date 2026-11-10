@@ -62,11 +62,15 @@ enum Workspaces {
         }
         let text = prompt(task: t, branch: branch, base: base, isolated: isolated)
         let promptDir = Integrations.baseDir + "/prompts"
-        try FileManager.default.createDirectory(atPath: promptDir, withIntermediateDirectories: true)
+        // L1: task details can hold client information — owner-only, and gone once the agent has read it.
+        Auth.secureBaseDir()
+        try FileManager.default.createDirectory(atPath: promptDir, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: promptDir)
         let promptFile = promptDir + "/task-\(t.id).txt"
-        try text.write(toFile: promptFile, atomically: true, encoding: .utf8)
+        Auth.writePrivate(text, promptFile)
         guard let exe = Shell.which(tool) else { throw Failure.message("`\(tool)` not found in PATH") }
-        let cmd = "cd \(shq(dir)) && \(shq(exe)) \"$(cat \(shq(promptFile)))\""
+        let cmd = launchCommand(dir: dir, exe: exe, promptFile: promptFile)
 
         let core = Core.shared
         core.q.sync {
@@ -81,6 +85,11 @@ enum Workspaces {
         }
         try openTerminal(cmd)
         return isolated ? "Agent launched in \(dir) (branch \(branch))." : "Agent launched in \(dir)."
+    }
+
+    /// Reads the prompt into a variable, deletes the file, then starts the agent with it.
+    static func launchCommand(dir: String, exe: String, promptFile: String) -> String {
+        "cd \(shq(dir)) && AB_PROMPT=\"$(cat \(shq(promptFile)))\" && rm -f \(shq(promptFile)) && \(shq(exe)) \"$AB_PROMPT\""
     }
 
     static func shq(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }

@@ -120,24 +120,74 @@ extension Color {
 }
 
 /// Soft pulsing dot for "working" agents.
+/// The ring is a Core Animation layer animation: it runs in the window server, so a pulsing dot costs the app nothing
+/// per frame. (A SwiftUI `repeatForever` animation re-ran layout of the whole window 60×/s — ~30% CPU with a few agents.)
 struct PulseDot: View {
     let color: Color
     var active: Bool
     @ObservedObject private var theme = ThemeStore.shared
-    @State private var on = false
 
     var body: some View {
         ZStack {
             if active && theme.pulse && theme.animations {
-                Circle().fill(color.opacity(0.35))
-                    .scaleEffect(on ? 2.2 : 1)
-                    .opacity(on ? 0 : 0.9)
-                    .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: on)
+                PulseRing(color: NSColor(color)).frame(width: 18, height: 18).allowsHitTesting(false)
             }
-            Circle().fill(color)
+            Circle().fill(color).frame(width: 8, height: 8)
         }
         .frame(width: 8, height: 8)
-        .onAppear { on = true }
+    }
+}
+
+private struct PulseRing: NSViewRepresentable {
+    let color: NSColor
+
+    final class RingView: NSView {
+        let ring = CALayer()
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.addSublayer(ring)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+        override func layout() {
+            super.layout()
+            let d: CGFloat = 8
+            ring.bounds = CGRect(x: 0, y: 0, width: d, height: d)
+            ring.cornerRadius = d / 2
+            ring.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        }
+        func start(_ color: NSColor) {
+            ring.backgroundColor = color.withAlphaComponent(0.35).cgColor
+            guard ring.animation(forKey: "pulse") == nil else { return }
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 1; scale.toValue = 2.2
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0.9; fade.toValue = 0
+            let g = CAAnimationGroup()
+            g.animations = [scale, fade]
+            g.duration = 1.4
+            g.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            g.repeatCount = .infinity
+            g.isRemovedOnCompletion = false
+            ring.add(g, forKey: "pulse")
+        }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window != nil { ring.removeAllAnimations(); start(storedColor) }
+        }
+        var storedColor: NSColor = .systemGreen
+    }
+
+    func makeNSView(context: Context) -> RingView {
+        let v = RingView(frame: .zero)
+        v.storedColor = color
+        v.start(color)
+        return v
+    }
+
+    func updateNSView(_ v: RingView, context: Context) {
+        v.storedColor = color
+        v.ring.backgroundColor = color.withAlphaComponent(0.35).cgColor
     }
 }
 

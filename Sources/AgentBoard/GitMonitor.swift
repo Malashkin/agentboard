@@ -10,14 +10,24 @@ final class GitMonitor {
     func start(interval: Double = 15) {
         let t = DispatchSource.makeTimerSource(queue: queue)
         t.schedule(deadline: .now() + 1, repeating: interval)
-        t.setEventHandler { [weak self] in self?.refresh() }
+        t.setEventHandler { [weak self] in self?.tick() }
         t.resume()
         timer = t
     }
 
     func refreshNow() { queue.async { [weak self] in self?.refresh() } }
 
+    private var lastRefresh: Double = 0
+
+    /// `git status` on every worktree is the app's most expensive background work: while no window is visible it
+    /// runs once a minute instead of every 15 s (commits still arrive at once through the git hook).
+    private func tick() {
+        if !AppVisibility.isVisible && now() - lastRefresh < 60 { return }
+        refresh()
+    }
+
     private func refresh() {
+        lastRefresh = now()
         let projects = Core.shared.q.sync { Core.shared.allProjects() }
         var out: [String: GitSnapshot] = [:]
         for p in projects { out[p.id] = Self.snapshot(path: p.path) }
