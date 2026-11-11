@@ -99,7 +99,9 @@ AgentBoard sits next to your agents and turns all of that into one live board.
   to edit them is stopped with "talk to Batman first"; a commit by another agent that touches
   them is refused by a git pre-commit hook. Leases expire on their own, end with the session,
   and you can drop any of them from the app. Your own commits are never blocked.
-- **Conflict warnings** when an agent edits a file someone else changed recently.
+- **Conflict warnings before the conflict.** A new request that names a file or folder another agent is
+  editing or has reserved gets a heads-up right away, before the agent's first edit; and an edit of a file
+  someone else changed recently is flagged too.
 - **Stuck detection.** The same command failing three times, eight failures in a row, or the same
   action over and over → the agent is marked *stuck*, you get notified, and the agent itself is
   told to stop and change approach.
@@ -195,7 +197,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 386 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 392 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

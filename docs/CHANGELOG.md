@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a Gemini session gets a card, the feed, the rules, reservations (a refused edit comes back as
   `decision: deny`), messages (AfterAgent keeps it going when one is waiting) and terminal delivery.
   Needs Gemini CLI 0.26+.
+- **Overlap caught when the request arrives.** A new request that names files or folders (`login.ts`,
+  `src/db/`, `Core.swift:42`) another active agent edited in the last 30 minutes or has reserved is answered
+  with a heads-up in the agent's context — who, what, and "talk to them or reserve your part" — before its
+  first edit, and the human sees it in the feed. Follows the *conflict warnings* setting.
 - **Connect in one click.** While Claude Code hooks aren't installed, a banner over the board offers
   *Connect Claude Code* (hooks + MCP).
 
@@ -93,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 386 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 392 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

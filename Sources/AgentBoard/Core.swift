@@ -886,6 +886,12 @@ final class Core {
                     ctx.append("[AgentBoard] Update: also working in the project right now:\n\(digest)\nYour agent_id: \(agent.id). Details on any agent — agent_activity(agent).")
                 }
             }
+            if !fromSystem, AppSettings.conflictWarnings, let w = overlapWarning(prompt: prompt, agent: agent) {
+                ctx.append(w.text)
+                addEvent(project: project.id, agent: agent.id, kind: "conflict",
+                         title: "\(agent.name) got a request that touches \(w.who.joined(separator: ", "))'s work — told before it starts",
+                         detail: w.text)
+            }
             if let inbox = takeInbox(agent: agent.id) { ctx.append(inbox) }
             if !fromSystem { onPrompt?(agent, prompt) }
             reply(ctx.isEmpty ? nil : hookOutput("UserPromptSubmit", context: ctx.joined(separator: "\n\n")))

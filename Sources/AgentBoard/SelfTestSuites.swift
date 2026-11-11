@@ -265,6 +265,15 @@ extension SelfTest {
               "context passes through unchanged, without a decision")
         check(GeminiHooks.fromClaude(event: "AfterTool", nil) == nil, "nothing to say → no output (Gemini wants silence)")
 
+        section("Paths named in a request", layer: "unit")
+        let named = Core.mentionedPaths(in: "Fix `src/auth/login.ts:42` and ./scripts/test.sh, see docs/ (e.g. v1.2, 3.5 or https://x.io/a.b). Also README.md.")
+        check(named == ["src/auth/login.ts", "scripts/test.sh", "docs/", "README.md"],
+              "files, folders and line references are picked out; versions, abbreviations and URLs are not", named.joined(separator: " | "))
+        check(Core.mention("login.ts", covers: "src/auth/login.ts") && Core.mention("src/auth", covers: "src/auth/login.ts")
+                && Core.mention("src/auth/", covers: "src/auth/login.ts") && !Core.mention("auth.ts", covers: "src/oauth.ts")
+                && !Core.mention("src/au", covers: "src/auth/login.ts"),
+              "a name matches the file anywhere, a folder what's below it — never a part of a name")
+
         section("Who needs you: the ⌥⌘J order", layer: "unit")
         let people = [boardAgent("idle-new", "idle", started: 1, seen: 9_900),
                       boardAgent("idle-old", "idle", started: 1, seen: 9_000),
@@ -792,6 +801,23 @@ extension SelfTest {
         if AppSettings.notifyWaiting {
             check(waitingAlerts.count == 1, "…and that one is announced", "\(waitingAlerts.count)")
         }
+
+        section("Overlap is caught when the request arrives, not at the first edit")
+        _ = hook(["hook_event_name": "PreToolUse", "session_id": "mx", "cwd": repo, "tool_name": "Edit",
+                  "tool_input": ["file_path": repo + "/src/parser/lexer.ts", "old_string": "a", "new_string": "b"]])
+        let warnCtx = (hook(["hook_event_name": "UserPromptSubmit", "session_id": "my", "cwd": repo,
+                             "prompt": "The tokenizer in lexer.ts drops unicode, please fix it"])?["hookSpecificOutput"] as? JSON)?.s("additionalContext") ?? ""
+        check(warnCtx.contains("Heads up") && warnCtx.contains(mx.name) && warnCtx.contains("src/parser/lexer.ts"),
+              "a request naming a file another agent is editing warns the agent before it starts", warnCtx.trunc(200))
+        check(core.q.sync { !core.db.query("SELECT 1 FROM events WHERE agent_id=? AND kind='conflict' AND title LIKE '%told before it starts%'", [my.id]).isEmpty },
+              "…and the human sees it in the feed")
+        let quiet = (hook(["hook_event_name": "UserPromptSubmit", "session_id": "my", "cwd": repo,
+                           "prompt": "Now update README.md with the new flags"])?["hookSpecificOutput"] as? JSON)?.s("additionalContext") ?? ""
+        check(!quiet.contains("Heads up"), "a request about something nobody else touches stays quiet", quiet.trunc(160))
+        _ = core.q.sync { core.reserve(agent: mx, patterns: ["src/db/"], minutes: 30, exclusive: true, reason: "migration") }
+        let resCtx = (hook(["hook_event_name": "UserPromptSubmit", "session_id": "my", "cwd": repo,
+                            "prompt": "Add an index in src/db/schema.sql"])?["hookSpecificOutput"] as? JSON)?.s("additionalContext") ?? ""
+        check(resCtx.contains("reserved src/db/") && resCtx.contains("migration"), "a folder someone reserved counts too, with their reason", resCtx.trunc(200))
 
         section("Delivering a human message into a session")
         _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "mx", "cwd": repo, "prompt": "Refactor the parser please"])

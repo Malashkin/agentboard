@@ -325,3 +325,66 @@ extension Core {
         updateTask(t.id, status: .in_progress, assignee: .some(a.id), by: a.id)
     }
 }
+
+// MARK: - Overlap before it happens
+//
+// When a new request names files or folders another active agent is editing or has reserved, the agent
+// hears about it before its first edit — not when the conflict warning fires halfway through.
+
+extension Core {
+    /// Path-like words in a request: `src/auth/`, `login.ts`, `./scripts/test.sh`, `Sources/AgentBoard/Core.swift:42`.
+    static func mentionedPaths(in prompt: String) -> [String] {
+        let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "`'\"()[]{},;<>«»"))
+        var out: [String] = []
+        for raw in prompt.components(separatedBy: separators) {
+            var w = raw
+            while let last = w.last, ".:!?".contains(last) { w.removeLast() }
+            if let colon = w.firstIndex(of: ":"), w[w.index(after: colon)...].allSatisfy(\.isNumber) { w = String(w[..<colon]) }
+            while w.hasPrefix("./") { w = String(w.dropFirst(2)) }
+            guard w.count >= 4, !w.contains("://"), !w.hasPrefix("-") else { continue }
+            let hasDir = w.contains("/")
+            let ext = (w as NSString).pathExtension
+            let base = (w as NSString).deletingPathExtension
+            // "login.ts" yes; "e.g", "v1.2", "3.5" no.
+            let hasExt = !ext.isEmpty && ext.count <= 6 && ext.first?.isLetter == true
+                && ext.allSatisfy { $0.isLetter || $0.isNumber } && base.count >= 2 && base.contains { $0.isLetter }
+            guard hasDir || hasExt else { continue }
+            if !out.contains(w) { out.append(w) }
+        }
+        return out
+    }
+
+    /// Does a mentioned word point at this repo-relative path? A folder covers what's below it; a bare file
+    /// name matches that file anywhere.
+    static func mention(_ m: String, covers path: String) -> Bool {
+        if m.hasSuffix("/") { return path.hasPrefix(m) || path + "/" == m }
+        if path == m || path.hasSuffix("/" + m) || path.hasPrefix(m + "/") { return true }
+        if m.hasPrefix("/") { return m.hasSuffix("/" + path) }
+        return false
+    }
+
+    /// What the request touches that someone else is on right now: their recent edits (30 min) and reservations.
+    func overlapWarning(prompt: String, agent: Agent) -> (text: String, who: [String])? {
+        let mentions = Self.mentionedPaths(in: prompt)
+        guard !mentions.isEmpty else { return nil }
+        var hits: [String: [String]] = [:]   // agent name → what
+        let others = db.query("SELECT * FROM file_touches WHERE project_id=? AND agent_id != ? AND last_at > ?",
+                              [agent.projectId, agent.id, now() - 1800]).map(FileTouch.init)
+        for f in others {
+            guard mentions.contains(where: { Self.mention($0, covers: f.path) }),
+                  let a = self.agent(id: f.agentId), a.isActive(staleMinutes: AppSettings.staleMinutes) else { continue }
+            hits[a.name, default: []].append("edits \(f.path)")
+        }
+        for r in activeReservations(project: agent.projectId) where r.agentId != agent.id {
+            guard mentions.contains(where: { Self.mention($0, covers: r.pattern) || Self.patternMatches(r.pattern, $0) }),
+                  let a = self.agent(id: r.agentId) else { continue }
+            hits[a.name, default: []].append("reserved \(r.pattern)" + (r.reason.isEmpty ? "" : " (\(r.reason))"))
+        }
+        guard !hits.isEmpty else { return nil }
+        let lines = hits.keys.sorted().map { "- \($0): " + Array(Set(hits[$0]!)).sorted().prefix(4).joined(separator: "; ") }
+        return ("[AgentBoard] Heads up before you start: this request touches what another agent is working on right now:\n"
+                + lines.joined(separator: "\n")
+                + "\nTalk to them first (send_message) or reserve_files the part you take, so you don't overwrite each other.",
+                hits.keys.sorted())
+    }
+}

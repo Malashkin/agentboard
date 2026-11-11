@@ -44,7 +44,8 @@ updated: 2026-11-11
 - MCP server `agentboard`: look at another agent's activity, message agents, post notes, manage tasks.
 - **File reservations** with expiry; edits of someone else's reservation are denied; a git pre-commit
   hook refuses an agent's commit that touches them. Human commits are never blocked.
-- **Conflict warnings** when an agent edits a file another agent changed recently.
+- **Conflict warnings** when an agent edits a file another agent changed recently — and already when a new
+  request names files or folders someone else is editing or has reserved, before the first edit.
 - **Stuck detection** with a notification and a nudge to the agent.
 - **Commit control** — log, notify, or require approval.
 - **Pin a session to a project** when it was started outside the project folder.
