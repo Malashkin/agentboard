@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each press walks on to the next; **⌥⌘K** opens a floating *Needs you* panel with every request and every
   waiting agent, a reply field and a terminal button. Settings → General can turn them off.
 
+- **Open sessions show up before any hook.** Every open, interactive Claude Code session in a project gets
+  a card straight from `~/.claude/sessions` (status from the file, terminal from its process), so the board
+  is full the moment the app starts — including sessions opened before the hooks were installed. When its
+  hooks start arriving they land on the same card. Background `claude -p` runs and cards the human ended are
+  left alone; a session outside every project feeds the *Suggested* list instead.
+- **Connect in one click.** While Claude Code hooks aren't installed, a banner over the board offers
+  *Connect Claude Code* (hooks + MCP).
+
 ### Fixed
 - The "Claude is waiting for your input" nudge after a turn no longer pops a macOS *waiting for you*
   notification (the card already showed the agent as idle).
@@ -78,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 357 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 363 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

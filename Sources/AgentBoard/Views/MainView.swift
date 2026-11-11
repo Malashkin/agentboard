@@ -118,6 +118,9 @@ struct MainView: View {
                 if let err = store.lastError {
                     Banner(text: err, color: .orange, icon: "exclamationmark.triangle") { store.lastError = nil }
                 }
+                if store.hooksMissing && !store.agents.isEmpty {
+                    ConnectHooksBanner().transition(.move(edge: .top).combined(with: .opacity))
+                }
                 if let c = store.liveSuggestion {
                     LiveFolderBanner(candidate: c) { add(c) }
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -255,6 +258,42 @@ struct LiveFolderBanner: View {
         }
         .padding(10)
         .background(Color.accentColor.opacity(0.08))
+    }
+}
+
+/// Sessions are on the board from their files, but Claude Code isn't connected: one click fixes it.
+struct ConnectHooksBanner: View {
+    @EnvironmentObject var store: Store
+    @State private var busy = false
+    @State private var result: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bolt.horizontal.circle").foregroundStyle(Color.accentColor)
+            Text(result ?? "Your open Claude Code sessions are shown from their session files. Connect Claude Code for live actions, decisions, replies and coordination.")
+                .lineLimit(3)
+            Spacer()
+            if result == nil {
+                Button(busy ? "Connecting…" : "Connect Claude Code") { connect() }.controlSize(.small).disabled(busy)
+            } else {
+                Button("OK") { store.hooksMissing = false }.buttonStyle(.borderless).controlSize(.small)
+            }
+        }
+        .padding(10)
+        .background(Color.accentColor.opacity(0.08))
+    }
+
+    func connect() {
+        busy = true
+        DispatchQueue.global().async {
+            var err: String?
+            do { try Integrations.installClaudeHooks(); try Integrations.installClaudeMCP() } catch { err = error.localizedDescription }
+            DispatchQueue.main.async {
+                busy = false
+                result = err.map { "Couldn't connect: \($0)" }
+                    ?? "Connected. Each open session reports live from its next prompt; restart a session if it doesn't."
+            }
+        }
     }
 }
 

@@ -446,6 +446,26 @@ final class Core {
         return agent(id: id)!
     }
 
+    /// An open Claude Code session found in ~/.claude/sessions that no hook has reported yet.
+    /// In a project → it gets a card now (status from the session file, its terminal from the process);
+    /// outside every project → its folder is offered as a suggestion. Returns whether the board changed.
+    @discardableResult
+    func adoptLiveSession(_ l: SessionLiveness.Live) -> Bool {
+        guard let project = projectFor(cwd: l.cwd) else { noteUnknownFolder(l.cwd); return false }
+        let existed = !db.query("SELECT 1 FROM agents WHERE tool='claude' AND session_id=?", [l.sessionId]).isEmpty
+        let a = touchAgent(tool: "claude", sessionId: l.sessionId, project: project, cwd: l.cwd, transcript: nil, revive: false)
+        var f: [String: Any] = ["status": l.status == "busy" ? "working" : "idle"]
+        let tty = SessionLiveness.tty(pid: l.pid)
+        if !tty.isEmpty { f["tty"] = tty }
+        if a.lastAction.isEmpty { f["last_action"] = "found running in \(URL(fileURLWithPath: l.cwd).lastPathComponent)" }
+        setAgent(a.id, f)
+        if !existed {
+            addEvent(project: project.id, agent: a.id, kind: "session_start",
+                     title: "\(a.name) found running (open Claude Code session) — details arrive with its next prompt")
+        }
+        return true
+    }
+
     /// Two open sessions with the same name (older versions picked names per project): rename the newer one.
     func dedupeOpenNames() {
         var seen = Set<String>()

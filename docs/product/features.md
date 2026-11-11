@@ -19,6 +19,8 @@ updated: 2026-11-11
   what the agent is doing, refreshed only after new activity (default: at most every 2 minutes per agent).
 - **Feed** — prompts, commands, edits, reads, searches, subagents, MCP calls, failures, answers, commits.
 - **Subagents** shown as lanes under their agent, with description and result.
+- **Open sessions appear by themselves** — every open Claude Code session in a project is on the board as
+  soon as the app starts, read from `~/.claude/sessions`, even before the hooks are connected.
 - **Live session status** from Claude Code's own session files (closed terminal → finished).
 - **History** of any day, including sessions and commits from before AgentBoard was installed (imported).
 - **Sidebar** shows the date of the last work per project. Right-click a project → *Rename…* (name shown in

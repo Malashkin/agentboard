@@ -612,6 +612,32 @@ extension SelfTest {
         check(agentRow("live1")?.status == "ended", "a session seen alive whose process is gone is ended")
         check(core.q.sync { core.activeReservations(project: project.id).filter { $0.agentId == live1.id }.isEmpty },
               "its reservations are released")
+        // An open session nobody told the board about (hooks not connected yet): it shows up from its file.
+        writeSession("adopt.json", ["pid": me, "sessionId": "found1", "procStart": utcStart, "status": "busy",
+                                     "cwd": repo, "kind": "interactive"])
+        writeSession("bg.json", ["pid": me, "sessionId": "bg1", "procStart": utcStart, "status": "busy",
+                                 "cwd": repo, "kind": "print"])
+        writeSession("away.json", ["pid": me, "sessionId": "away1", "procStart": utcStart, "status": "idle",
+                                   "cwd": "/definitely/not/a/project", "kind": "interactive"])
+        SessionLiveness.shared.tick(); core.q.sync {}
+        let found = agentRow("found1")
+        check(found != nil && found?.projectId == project.id && found?.status == "working",
+              "an open session in a project gets a card before any hook arrives, with its status from the file",
+              found.map { "\($0.projectId) \($0.status)" } ?? "nil")
+        check(agentRow("bg1") == nil, "a background run (not an interactive terminal) gets no card")
+        check(agentRow("away1") == nil, "a session outside every project gets no card")
+        let foundId = found?.id ?? ""
+        SessionLiveness.shared.tick(); core.q.sync {}
+        check(core.q.sync { core.db.query("SELECT 1 FROM agents WHERE session_id='found1'").count } == 1
+                && core.q.sync { core.db.query("SELECT 1 FROM events WHERE agent_id=? AND kind='session_start'", [foundId]).count } == 1,
+              "seen again → the same card, no second 'found' event")
+        core.q.sync { core.endAgent(foundId) }
+        SessionLiveness.shared.tick(); core.q.sync {}
+        check(agentRow("found1")?.status == "ended", "a card the human ended isn't brought back while its process lives on")
+        _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "found1", "cwd": repo, "prompt": "Carry on with the parser"])
+        check(core.q.sync { core.db.query("SELECT 1 FROM agents WHERE session_id='found1'").count } == 1
+                && agentRow("found1")?.lastPrompt.contains("parser") == true,
+              "when its hooks start arriving they land on that same card")
         try? FileManager.default.removeItem(atPath: sessions)
         _ = idle1
 

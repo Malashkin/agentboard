@@ -14,7 +14,7 @@ final class SessionLiveness {
     /// Sessions seen with a live process; only those can be declared closed when the process is gone.
     private var seenAlive = Set<String>()
 
-    struct Live { var pid: Int32; var sessionId: String; var cwd: String; var status: String; var updatedAt: Double }
+    struct Live { var pid: Int32; var sessionId: String; var cwd: String; var status: String; var updatedAt: Double; var kind: String = "" }
 
     var dir: String {
         (ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory() + "/.claude") + "/sessions"
@@ -40,7 +40,7 @@ final class SessionLiveness {
                   let pid = (j["pid"] as? NSNumber)?.int32Value, let sid = j.str("sessionId") else { continue }
             guard Self.isAlive(pid: pid, procStart: j.s("procStart")) else { continue }
             out[sid] = Live(pid: pid, sessionId: sid, cwd: j.s("cwd"), status: j.s("status"),
-                            updatedAt: ((j["statusUpdatedAt"] as? NSNumber)?.doubleValue ?? 0) / 1000)
+                            updatedAt: ((j["statusUpdatedAt"] as? NSNumber)?.doubleValue ?? 0) / 1000, kind: j.s("kind"))
         }
         return out
     }
@@ -101,7 +101,25 @@ final class SessionLiveness {
                     changed = true
                 }
             }
+            // Open sessions the board hasn't heard from (hooks not connected yet, or the session predates
+            // them): put them on the board right away, from the session file alone.
+            // Only sessions the board has never seen: a card the human ended stays ended while its process lives on.
+            let known = Set(core.db.query("SELECT session_id FROM agents WHERE tool='claude'").map { $0.s("session_id") })
+            for l in live.values where !known.contains(l.sessionId) && Self.adoptable(l) {
+                if core.adoptLiveSession(l) { changed = true }
+            }
             if changed { core.changed() }
         }
+    }
+
+    /// A session worth showing: an interactive terminal session (not a background `claude -p` run) with a folder.
+    static func adoptable(_ l: Live) -> Bool {
+        (l.kind.isEmpty || l.kind == "interactive") && l.cwd.hasPrefix("/")
+    }
+
+    /// The terminal of a process (`/dev/ttysNNN`), if it has one.
+    static func tty(pid: Int32) -> String {
+        let t = Shell.run("/bin/ps", ["-o", "tty=", "-p", "\(pid)"], timeout: 5).line
+        return t.hasPrefix("ttys") ? "/dev/" + t : ""
     }
 }

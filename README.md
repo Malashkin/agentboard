@@ -67,6 +67,9 @@ AgentBoard sits next to your agents and turns all of that into one live board.
   MCP calls, failures, answers, commits. The feed shows the important events; one click shows all.
 - **Subagents get their own lanes** (`↳ Explore: searching "login("`), with their description
   and result.
+- **Nothing to set up per session.** Every open Claude Code session in one of your projects is on the board
+  the moment AgentBoard starts — read from Claude Code's own session files, even ones you opened before
+  installing it. A banner offers to connect the hooks in one click for live detail.
 - **Real session status.** AgentBoard reads Claude Code's own session files and checks the
   process behind each one, so an idle-but-open terminal stays "idle" and a closed terminal is
   marked "finished" even if no goodbye event arrived.
@@ -191,7 +194,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 357 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 363 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

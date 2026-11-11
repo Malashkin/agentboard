@@ -99,6 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppVisibility.start()
         // Not in a side instance: it would take the shortcuts from the real app.
         if !Integrations.isSideInstance { HotKeys.apply() }
+        DispatchQueue.global(qos: .utility).async {
+            let missing = !Integrations.claudeHooksInstalled()
+            DispatchQueue.main.async { store.hooksMissing = missing }
+        }
 
         GitMonitor.shared.onUpdate = { snap in if store.git != snap { ThemeStore.animate { store.git = snap } } }
         GitMonitor.shared.start()

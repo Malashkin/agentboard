@@ -35,6 +35,8 @@ final class Store: ObservableObject {
     /// "Not now" on the live banner: hidden for this run of the app, still listed under Suggested.
     @Published var dismissedLive: Set<String> = []
     @Published var ignoredCount = ProjectDiscovery.ignored.count
+    /// Claude Code hooks aren't installed (checked at launch): sessions are known only from their files.
+    @Published var hooksMissing = false
     private var scanning = false
     private var rescanPending = false
 
