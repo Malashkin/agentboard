@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a Gemini session gets a card, the feed, the rules, reservations (a refused edit comes back as
   `decision: deny`), messages (AfterAgent keeps it going when one is waiting) and terminal delivery.
   Needs Gemini CLI 0.26+.
+- **Hand work from one session to another.** Right-click a card → *Brief another agent on X's work* / *Brief X
+  on…*: AgentBoard writes a briefing from what it saw (the human's requests, files, commits, reservations, the
+  last reply — agent text neutralized and fenced) and puts it in the other agent's context; one sitting at its
+  prompt is woken in its terminal. Agents do the same with MCP `handoff(to, note)`.
 - **Project memory.** MCP `remember(text)` / `forget(id)` / `list_memory`: lasting facts about a project that
   every new session (Claude Code, Codex, Gemini CLI) is given at its start, each marked with who noted it
   (agents' facts are framed as information, not orders). Duplicates are skipped, the newest 40 are kept. A
@@ -102,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 399 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 404 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

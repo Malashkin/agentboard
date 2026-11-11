@@ -311,6 +311,22 @@ final class Store: ObservableObject {
         }
     }
 
+    /// The human asks AgentBoard to brief `target` on `source`'s work: queued for its context, and an agent
+    /// sitting at its prompt is woken with a short line so it reads it now.
+    func brief(_ source: Agent, to target: Agent, note: String = "", done: @escaping (String) -> Void = { _ in }) {
+        let st = status(target)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let core = Core.shared
+            core.q.sync { _ = core.handoff(source: source, target: target, note: note, by: nil) }
+            var how = "\(target.name) gets the briefing on \(source.name)'s work at its next step or prompt."
+            if st == .idle || st == .waiting,
+               let t = SessionDelivery.typeIntoTerminal(target, "AgentBoard put a briefing on \(source.name)'s work in your context — read it and take it into account.", auto: true) {
+                how = "Briefing sent; \(target.name) was at its prompt and was woken in its terminal (\(t))."
+            }
+            DispatchQueue.main.async { done(how) }
+        }
+    }
+
     private var lastJumped: String?
 
     /// ⌥⌘J: the next agent that needs you, terminal to the front; nobody waiting → the answer panel says so.

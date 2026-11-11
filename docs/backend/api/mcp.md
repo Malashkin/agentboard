@@ -34,6 +34,7 @@ Messages for an agent ride along in its context: the human's under "From the hum
 | `set_focus` | `focus`, `files?` | Declare current work; warns about overlaps |
 | `send_message` | `to` (name, id, `all`), `text` | Message delivered into the target's context |
 | `post_note` | `text`, `client?` | Note in the feed |
+| `handoff` | `to`, `note?` | Sends the target a briefing on the caller's work (requests, files, commits, reservations, last reply) plus the note, as a peer message |
 | `remember` | `text` | Saves a lasting fact to project memory; every new session gets it at its start |
 | `forget` | `id` | Removes a fact from project memory (same project only) |
 | `list_memory` | — | The project's memory |

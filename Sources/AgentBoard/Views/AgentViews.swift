@@ -105,6 +105,24 @@ struct AgentCard: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onOpen() }
+        .contextMenu {
+            let others = store.agents.filter { $0.id != agent.id && $0.projectId == agent.projectId && store.status($0) != .ended }
+            Menu("Brief another agent on \(agent.name)'s work") {
+                ForEach(others) { o in
+                    Button(o.name) { store.brief(agent, to: o) { replyResult = $0 } }
+                }
+                if others.isEmpty { Text("No other open agents in this project") }
+            }
+            Menu("Brief \(agent.name) on…") {
+                ForEach(others) { o in
+                    Button("\(o.name)'s work") { store.brief(o, to: agent) { replyResult = $0 } }
+                }
+                if others.isEmpty { Text("No other open agents in this project") }
+            }
+            if store.status(agent) != .ended {
+                Button("Open its terminal") { store.focusTerminal(agent) { replyResult = $0 } }
+            }
+        }
     }
 
     func sendReply() {

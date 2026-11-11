@@ -99,6 +99,9 @@ AgentBoard sits next to your agents and turns all of that into one live board.
   to edit them is stopped with "talk to Batman first"; a commit by another agent that touches
   them is refused by a git pre-commit hook. Leases expire on their own, end with the session,
   and you can drop any of them from the app. Your own commits are never blocked.
+- **Hand work over between sessions.** Right-click a card to brief another agent on its work: AgentBoard
+  writes the briefing from what it saw — requests, files, commits, the last reply — and delivers it. Agents
+  can hand over their own work with `handoff`.
 - **Project memory.** What one session learns — how to run the tests, a module not to touch, a gotcha that
   cost an hour — it saves with `remember`, and every new session in the project gets it at its start, whatever
   the tool. You see, add and remove facts in the project's *Memory* tab. Nothing is written into the repo.
@@ -181,7 +184,7 @@ git ─pre-commit / post-commit─▶ agentboard-hook ────────�
 
 MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`, `create_task`,
 `claim_task`, `update_task`, `set_focus`, `reserve_files`, `release_files`, `who_touches`, `remember`, `forget`,
-`list_memory`, `register_agent`.
+`list_memory`, `handoff`, `register_agent`.
 
 ## Privacy and safety
 
@@ -201,7 +204,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 399 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 404 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

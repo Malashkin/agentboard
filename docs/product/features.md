@@ -40,6 +40,8 @@ updated: 2026-11-11
 - **While you were away** — a short digest after a break (default 20 minutes).
 
 ## Coordination
+- **Briefings between sessions** — right-click a card to brief another agent on its work (or an agent calls
+  `handoff`); the briefing is written from what AgentBoard saw and delivered into the other session.
 - **Project memory** — facts agents (`remember`) or you save, given to every new session at its start; a
   *Memory* tab per project to review them.
 - Agents get a digest of their neighbours at session start and on new requests.

@@ -14,6 +14,7 @@ extension Core {
     • reserve_files(paths, minutes, reason) / release_files(paths) — reserve files before editing them: \
     other agents can't edit or commit them while the reservation is active.
     • who_touches(path) — who recently changed a file and who has reserved it.
+    • handoff(to, note) — hand your work to another agent: it gets a briefing on what you did, plus your note.
     • remember(text) / forget(id) — project memory: lasting facts every future session gets at its start.
     Claude Code is detected automatically. Other clients (Codex etc.) first call register_agent(cwd) \
     and pass the returned agent_id in every call.
@@ -60,6 +61,8 @@ extension Core {
                  ["to": prop("string", "Agent name, its agent_id, or \"all\""), "text": prop("string", "Message text")], ["to", "text"]),
             tool("post_note", "A note in the project feed for the human and other agents (decision, warning, outcome).",
                  ["text": prop("string", "Note text"), "client": prop("string", "Client, if the note is about one")], ["text"]),
+            tool("handoff", "Hand your work over to another agent: AgentBoard sends it a briefing on what you did (requests, files, commits, reservations, your last reply) plus your note. Use it when someone else continues or builds on your work.",
+                 ["to": prop("string", "Agent name or agent_id"), "note": prop("string", "What they should know or do next")], ["to"]),
             tool("remember", "Save a lasting fact about this project that every future agent session should know at its start: how to build or test, a module not to touch, a gotcha. One short fact per call; not for progress updates (use update_task / post_note).",
                  ["text": prop("string", "The fact, in one or two sentences")], ["text"]),
             tool("forget", "Remove a fact from project memory that is wrong or outdated (its #id is shown at session start and by list_memory).",
@@ -281,6 +284,14 @@ extension Core {
             let hint = st == .working ? "it will get it on its next action"
                 : "currently \(st.label); it will get it when the human writes to it again or it calls agentboard"
             return done("Message for \(target.name) queued — \(hint).")
+
+        case "handoff":
+            guard let me else { return done("I don't know who you are. Pass agent_id (register_agent).", true) }
+            guard let to = args.str("to"), let target = findAgent(to, project: project.id), target.id != me.id else {
+                return done("Agent \"\(args.s("to"))\" not found (or it's you).", true)
+            }
+            handoff(source: me, target: target, note: args.s("note"), by: me)
+            return done("Briefing on your work sent to \(target.name); it gets it at its next step or prompt.")
 
         case "remember":
             guard let text = args.str("text"), !text.trimmed.isEmpty else { return done("text is required", true) }
