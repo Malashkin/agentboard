@@ -21,7 +21,7 @@ struct SummariesView: View {
                         Text(store.generatingDays.contains(key) ? "Claude is writing the summary…" : "Generate summary")
                     }.frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.hoverProminent)
                 .disabled(store.generatingDays.contains(key))
                 Text(AppSettings.autoSummary ? "Automatically every day at \(String(format: "%02d:%02d", AppSettings.summaryHour, AppSettings.summaryMinute))" : "Auto-summary is off")
                     .font(.caption).foregroundStyle(.secondary)
@@ -189,7 +189,7 @@ struct IntegrationRow: View {
                 Spacer()
                 VStack(alignment: .trailing) {
                     Button(installed ? "Reinstall" : "Connect") { install() }
-                        .buttonStyle(.borderedProminent).disabled(busy)
+                        .buttonStyle(.hoverProminent).disabled(busy)
                     if installed, let uninstall { Button("Disconnect") { uninstall() }.disabled(busy) }
                 }
             }
@@ -462,7 +462,7 @@ struct AppearanceSettings: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverRow)
         .scaleEffect(selected ? 1.03 : 1)
         .animation(theme.anim(), value: selected)
     }

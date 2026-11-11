@@ -148,7 +148,7 @@ struct Dashboard: View {
             } label: { Label("Add widget", systemImage: "plus") }
             .fixedSize()
             Button("Reset") { ThemeStore.animate { layouts.reset(key) } }
-            Button("Done") { ThemeStore.animate { editing = false } }.buttonStyle(.borderedProminent)
+            Button("Done") { ThemeStore.animate { editing = false } }.buttonStyle(.hoverProminent)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: theme.density.radius).fill(theme.accent.opacity(0.1)))
@@ -165,7 +165,7 @@ struct Dashboard: View {
                 }.help(w.wide ? "Half width" : "Full width")
                 Button { remove(w) } label: { Image(systemName: "xmark") }.help("Hide widget")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.hover)
         }
         .frame(maxWidth: .infinity)
         .opacity(dragging == w.id ? 0.4 : 1)
@@ -417,7 +417,7 @@ struct WidgetContent: View {
                         Spacer()
                         Text("until \(Fmt.time(r.expiresAt))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }
-                            .buttonStyle(.borderless).help("Release reservation (the agent will be notified)")
+                            .buttonStyle(.hover).help("Release reservation (the agent will be notified)")
                     }
                 }.feedRowTransition()
                 .animateRows(list.map(\.id))

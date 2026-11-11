@@ -24,7 +24,7 @@ struct BoardView: View {
                 Spacer()
                 Text("Drag cards between columns").font(.caption).foregroundStyle(.secondary)
                 Button { creating = true } label: { Label("New task", systemImage: "plus") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.hoverProminent)
             }
             .padding(.horizontal, 20).padding(.top, 14)
             ScrollView(.horizontal) {
@@ -51,6 +51,7 @@ struct BoardView: View {
                 VStack(spacing: 8) {
                     ForEach(list) { t in
                         TaskCard(task: t)
+                            .hoverHighlight(cornerRadius: ThemeStore.shared.density.radius)
                             .onTapGesture { editing = t }
                             .draggable(String(t.id))
                             .contextMenu {
@@ -159,7 +160,7 @@ struct TaskEditor: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") { save() }
                     .keyboardShortcut(.return, modifiers: .command)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.hoverProminent)
                     .disabled(title.trimmed.isEmpty)
             }
         }

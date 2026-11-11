@@ -51,7 +51,7 @@ struct AgentCard: View {
                         Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.red)
                         Text(agent.stuck).font(.caption).foregroundStyle(.red).lineLimit(2)
                         Spacer(minLength: 0)
-                        Button("Message") { onMessage() }.font(.caption).buttonStyle(.borderless)
+                        Button("Message") { onMessage() }.font(.caption).buttonStyle(.hover)
                     }
                     .padding(6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.08)))
@@ -94,16 +94,21 @@ struct AgentCard: View {
                     Spacer()
                     Text(Fmt.rel(agent.lastSeen, now: store.now)).foregroundStyle(.secondary)
                     if st != .ended {
-                        Button { store.focusTerminal(agent) { replyResult = $0 } } label: { Image(systemName: "terminal") }
-                            .buttonStyle(.borderless).help("Bring its terminal to the front")
+                        Button { store.focusTerminal(agent) { replyResult = $0 } } label: {
+                            Label("Terminal", systemImage: "terminal").labelStyle(.titleAndIcon)
+                                .font(.callout.weight(.medium))
+                        }
+                        .buttonStyle(.hoverBordered)
+                        .help("Bring its terminal to the front (⌥⌘J — the next agent that needs you)")
                     }
-                    Button { onMessage() } label: { Image(systemName: "text.bubble") }
-                        .buttonStyle(.borderless).help("Message the agent's session")
+                    Button { onMessage() } label: { Image(systemName: "text.bubble").font(.callout) }
+                        .buttonStyle(.hover).help("Message the agent's session")
                 }
                 .font(.caption)
             }
         }
         .contentShape(Rectangle())
+        .hoverHighlight(cornerRadius: ThemeStore.shared.density.radius)
         .onTapGesture { onOpen() }
         .contextMenu {
             let others = store.agents.filter { $0.id != agent.id && $0.projectId == agent.projectId && store.status($0) != .ended }
@@ -236,7 +241,7 @@ struct MessageSheet: View {
                 if result == nil {
                     Button("Send") { send(a) }
                         .keyboardShortcut(.return, modifiers: .command)
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.hoverProminent)
                         .disabled(text.trimmed.isEmpty || sending)
                 }
             }
@@ -379,7 +384,7 @@ struct AgentDetailSheet: View {
                                     if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary) }
                                     Spacer()
                                     Text("until \(Fmt.time(r.expiresAt))").font(.caption)
-                                    Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.borderless)
+                                    Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.hover)
                                 }
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)

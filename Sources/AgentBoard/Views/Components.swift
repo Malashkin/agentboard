@@ -192,3 +192,131 @@ extension View {
         transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -6)), removal: .identity))
     }
 }
+
+// MARK: - Hover feedback for everything clickable
+//
+// macOS buttons and tappable cards give no sign they can be clicked until you press them. Every clickable thing
+// in AgentBoard reacts to the pointer: a highlight under it and the pointing-hand cursor.
+
+/// Pointing-hand cursor while the pointer is over the view (balanced push/pop).
+struct PointerCursor: ViewModifier {
+    @State private var inside = false
+    func body(content: Content) -> some View {
+        content
+            .onHover { h in
+                guard h != inside else { return }
+                inside = h
+                if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .onDisappear { if inside { NSCursor.pop(); inside = false } }
+    }
+}
+
+private struct HoverBox<Label: View>: View {
+    let label: Label
+    let pressed: Bool
+    var kind: Kind
+    enum Kind { case icon, bordered, prominent, row }
+    @State private var hover = false
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.controlSize) private var size
+
+    var body: some View {
+        let small = size == .small || size == .mini
+        let accent = ThemeStore.shared.accent
+        label
+            .padding(.horizontal, padH(small))
+            .padding(.vertical, padV(small))
+            .foregroundStyle(kind == .prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+            .background(RoundedRectangle(cornerRadius: kind == .row ? 6 : 7, style: .continuous).fill(fill(accent)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(kind == .bordered ? Color.secondary.opacity(hover && enabled ? 0.45 : 0.25) : .clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+            .opacity(enabled ? 1 : 0.45)
+            .scaleEffect(pressed && enabled ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.12), value: hover)
+            .animation(.easeOut(duration: 0.08), value: pressed)
+            .onHover { hover = $0 }
+            .modifier(PointerCursor())
+    }
+
+    func padH(_ small: Bool) -> CGFloat {
+        switch kind { case .icon: return 4; case .row: return 6; default: return small ? 8 : 12 }
+    }
+    func padV(_ small: Bool) -> CGFloat {
+        switch kind { case .icon: return 3; case .row: return 3; default: return small ? 3 : 5 }
+    }
+    func fill(_ accent: Color) -> Color {
+        let h = hover && enabled, p = pressed && enabled
+        switch kind {
+        case .prominent: return accent.opacity(p ? 0.75 : h ? 0.88 : 1)
+        case .bordered: return Color.secondary.opacity(p ? 0.32 : h ? 0.22 : 0.12)
+        case .icon, .row: return (kind == .icon ? accent : Color.secondary).opacity(p ? 0.28 : h ? 0.16 : 0)
+        }
+    }
+}
+
+/// Icon-only and text-link buttons: transparent until hovered.
+struct HoverButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HoverBox(label: configuration.label, pressed: configuration.isPressed, kind: .icon) }
+}
+/// The default for every button in the app: a light pill that brightens under the pointer.
+struct HoverBorderedStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HoverBox(label: configuration.label, pressed: configuration.isPressed, kind: .bordered) }
+}
+/// The main action of a screen, in the accent color.
+struct HoverProminentStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HoverBox(label: configuration.label, pressed: configuration.isPressed, kind: .prominent) }
+}
+/// Whole rows that act as buttons.
+struct HoverRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HoverBox(label: configuration.label, pressed: configuration.isPressed, kind: .row) }
+}
+
+extension ButtonStyle where Self == HoverButtonStyle { static var hover: HoverButtonStyle { .init() } }
+extension ButtonStyle where Self == HoverBorderedStyle { static var hoverBordered: HoverBorderedStyle { .init() } }
+extension ButtonStyle where Self == HoverProminentStyle { static var hoverProminent: HoverProminentStyle { .init() } }
+extension ButtonStyle where Self == HoverRowStyle { static var hoverRow: HoverRowStyle { .init() } }
+
+/// Tappable cards and rows that aren't Buttons: an accent outline and lift under the pointer.
+struct HoverHighlight: ViewModifier {
+    var cornerRadius: CGFloat = 12
+    @State private var hover = false
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(ThemeStore.shared.accent.opacity(hover ? 0.55 : 0), lineWidth: 1.5)
+                    .allowsHitTesting(false)
+            )
+            .brightness(hover ? 0.03 : 0)
+            .animation(.easeOut(duration: 0.12), value: hover)
+            .onHover { hover = $0 }
+            .modifier(PointerCursor())
+    }
+}
+
+extension View {
+    func hoverHighlight(cornerRadius: CGFloat = 12) -> some View { modifier(HoverHighlight(cornerRadius: cornerRadius)) }
+    /// Every Button below without its own style gets the hover pill.
+    func hoverButtons() -> some View { buttonStyle(.hoverBordered) }
+}
+
+/// A feed row that expands on click: a soft background under the pointer (only when there is something to show).
+struct FeedRowHover: ViewModifier {
+    let active: Bool
+    @State private var hover = false
+    func body(content: Content) -> some View {
+        if active {
+            content
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(hover ? 0.1 : 0)).padding(.horizontal, -6))
+                .animation(.easeOut(duration: 0.12), value: hover)
+                .onHover { hover = $0 }
+                .modifier(PointerCursor())
+        } else {
+            content
+        }
+    }
+}

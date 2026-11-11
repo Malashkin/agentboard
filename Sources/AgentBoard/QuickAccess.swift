@@ -188,7 +188,7 @@ final class QuickPanel: NSObject, NSWindowDelegate {
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
         p.delegate = self
-        p.contentView = NSHostingView(rootView: QuickPanelView().environmentObject(Store.shared))
+        p.contentView = NSHostingView(rootView: QuickPanelView().environmentObject(Store.shared).hoverButtons())
         return p
     }
 }
@@ -239,8 +239,8 @@ struct QuickAgentRow: View {
                 Text(store.project(agent.projectId)?.name ?? "").foregroundStyle(.secondary)
                 Spacer()
                 Text(st.label).font(.caption).foregroundStyle(st.color)
-                Button { store.focusTerminal(agent) { result = $0 } } label: { Image(systemName: "terminal") }
-                    .buttonStyle(.borderless).help("Bring its terminal to the front")
+                Button { store.focusTerminal(agent) { result = $0 } } label: { Label("Terminal", systemImage: "terminal") }
+                    .help("Bring its terminal to the front")
             }
             Text(!agent.narrative.isEmpty ? agent.narrative : agent.lastAction)
                 .font(.callout).foregroundStyle(.secondary).lineLimit(2)

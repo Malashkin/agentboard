@@ -72,7 +72,7 @@ struct MainView: View {
                             Spacer()
                             if store.ignoredCount > 0 {
                                 Button("\(store.ignoredCount) ignored · show") { store.clearIgnoredSuggestions() }
-                                    .buttonStyle(.borderless).font(.caption2)
+                                    .buttonStyle(.hover).font(.caption2)
                                     .help("Suggest the folders you ignored again")
                             }
                         }
@@ -103,7 +103,7 @@ struct MainView: View {
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Button { addProject() } label: { Label("Add project", systemImage: "plus") }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.hover)
                     Spacer()
                     Circle().fill(store.serverRunning ? Color.green : Color.red).frame(width: 7, height: 7)
                         .help(store.serverRunning ? "Server running on 127.0.0.1:\(AppSettings.port)" : "Server not running")
@@ -222,10 +222,10 @@ struct SuggestionRow: View {
             } icon: { Image(systemName: "folder.badge.plus").foregroundStyle(.secondary) }
             Spacer()
             Button { onAdd() } label: { Image(systemName: "plus.circle") }
-                .buttonStyle(.borderless)
+                .buttonStyle(.hover)
                 .help("Add to the board")
             Button { store.ignoreSuggestion(candidate) } label: { Image(systemName: "xmark") }
-                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .buttonStyle(.hover).foregroundStyle(.secondary)
                 .help("Ignore — don’t suggest this folder again")
         }
         .help("\(candidate.path)\n\(candidate.toolsLabel)\(candidate.isGit ? "" : " · not a git repository")")
@@ -251,9 +251,9 @@ struct LiveFolderBanner: View {
             Spacer()
             Button("Add project") { onAdd() }.controlSize(.small)
             Button("Not now") { store.dismissedLive.insert(candidate.path) }
-                .buttonStyle(.borderless).controlSize(.small)
+                .buttonStyle(.hover).controlSize(.small)
             Button("Ignore") { store.ignoreSuggestion(candidate) }
-                .buttonStyle(.borderless).controlSize(.small)
+                .buttonStyle(.hover).controlSize(.small)
                 .help("Don’t suggest this folder again")
         }
         .padding(10)
@@ -276,7 +276,7 @@ struct ConnectHooksBanner: View {
             if result == nil {
                 Button(busy ? "Connecting…" : "Connect Claude Code") { connect() }.controlSize(.small).disabled(busy)
             } else {
-                Button("OK") { store.hooksMissing = false }.buttonStyle(.borderless).controlSize(.small)
+                Button("OK") { store.hooksMissing = false }.buttonStyle(.hover).controlSize(.small)
             }
         }
         .padding(10)
@@ -307,7 +307,7 @@ struct Banner: View {
             Image(systemName: icon)
             Text(text).lineLimit(3)
             Spacer()
-            if let onClose { Button { onClose() } label: { Image(systemName: "xmark") }.buttonStyle(.borderless) }
+            if let onClose { Button { onClose() } label: { Image(systemName: "xmark") }.buttonStyle(.hover) }
         }
         .padding(10)
         .foregroundStyle(color)
@@ -329,7 +329,7 @@ struct AwayBanner: View {
                 if digest.writing { ProgressView().controlSize(.small) }
                 Spacer()
                 Button { withAnimation(ThemeStore.shared.anim()) { store.awayDigest = nil } } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.hover)
             }
             Text(digest.text.isEmpty ? "Summarizing…" : digest.text).font(.callout).textSelection(.enabled)
         }
@@ -408,7 +408,7 @@ struct ApprovalRow: View {
                     Button("Request changes") { store.decide(item.id, allow: false, comment: comment) }
                         .disabled(comment.trimmed.isEmpty)
                     Button("Approve plan") { store.decide(item.id, allow: true, comment: "") }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.hoverProminent)
                 }
             } else {
                 if !compact && !item.gitStatus.isEmpty {
@@ -429,7 +429,7 @@ struct ApprovalRow: View {
                             .help("Like “Yes, don't ask again” in the terminal, but only until the session ends")
                     }
                     Button("Allow") { store.decide(item.id, allow: true, comment: comment) }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.hoverProminent)
                 }
             }
         }
@@ -465,7 +465,7 @@ struct ApprovalRow: View {
                             }
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hoverRow)
                     }
                     TextField("Other answer", text: Binding(get: { other[q.question] ?? "" }, set: {
                         other[q.question] = $0
@@ -477,7 +477,7 @@ struct ApprovalRow: View {
             HStack {
                 Spacer()
                 Button("Answer") { store.decide(item.id, allow: true, comment: "", answers: answers) }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.hoverProminent)
                     .disabled(answers.count < item.questions.count)
             }
         }

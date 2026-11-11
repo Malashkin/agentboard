@@ -39,7 +39,7 @@ struct TaskWorkspaceSection: View {
                         Button {
                             run { try Workspaces.launch(task: t, project: p, tool: tool, isolated: isolated) }
                         } label: { Label("Start agent", systemImage: "play.fill") }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.hoverProminent)
                             .disabled(busy)
                     }
                     Text("Opens \(AppSettings.terminalApp == "iTerm" ? "iTerm2" : "Terminal") with the agent; the task is assigned to it once it connects.")
@@ -58,7 +58,7 @@ struct TaskWorkspaceSection: View {
                     .font(.callout)
                     HStack {
                         Button { reviewing = true } label: { Label("Changes & review", systemImage: "doc.text.magnifyingglass") }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.hoverProminent)
                         if !t.worktree.isEmpty {
                             Button { revealInFinder(t.worktree) } label: { Image(systemName: "folder") }.help("Show in Finder")
                             Button { run { try Workspaces.openTerminal("cd \(Workspaces.shq(t.worktree))"); return nil } } label: {
@@ -223,7 +223,7 @@ struct ReviewSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if l.kind != .hunk {
                 Button { editing = (f.path, l); draft = "" } label: { Image(systemName: "plus.bubble") }
-                    .buttonStyle(.borderless).help("Comment on line").padding(.trailing, 6)
+                    .buttonStyle(.hover).help("Comment on line").padding(.trailing, 6)
             }
         }
         .font(.system(size: 12, design: .monospaced))
@@ -234,7 +234,7 @@ struct ReviewSheet: View {
                 Image(systemName: "text.bubble.fill").foregroundStyle(.orange)
                 Text(c.text).font(.callout)
                 Spacer()
-                Button { comments.removeAll { $0.id == c.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+                Button { comments.removeAll { $0.id == c.id } } label: { Image(systemName: "trash") }.buttonStyle(.hover)
             }
             .padding(8).padding(.leading, 90)
             .background(Color.orange.opacity(0.08))
@@ -282,7 +282,7 @@ struct ReviewSheet: View {
                 Button {
                     send(to: agent)
                 } label: { Label("Request changes (\(comments.count + (general.trimmed.isEmpty ? 0 : 1)))", systemImage: "paperplane.fill") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.hoverProminent)
                     .disabled(agent == nil || (comments.isEmpty && general.trimmed.isEmpty))
             }
         }

@@ -38,7 +38,7 @@ struct Onboarding: View {
                 Label("Add a project: the git repository folder your agents work in (button at the bottom left).", systemImage: "2.circle.fill")
                 Label("Run Claude Code in separate terminals in that folder or its worktrees. Agents will show up here and see each other.", systemImage: "3.circle.fill")
                 Label("In the evening, AgentBoard compiles a summary of what was done, by code and by client.", systemImage: "4.circle.fill")
-                Button("Open Integrations") { selection = .integrations }.buttonStyle(.borderedProminent)
+                Button("Open Integrations") { selection = .integrations }.buttonStyle(.hoverProminent)
             }
         }
     }
@@ -186,6 +186,7 @@ struct FeedList: View {
         }
         .padding(.vertical, 7)
         .contentShape(Rectangle())
+        .modifier(FeedRowHover(active: !e.detail.isEmpty))
         .onTapGesture {
             guard !e.detail.isEmpty else { return }
             if isOpen { expanded.remove(e.id) } else { expanded.insert(e.id) }
@@ -285,7 +286,7 @@ struct MemoryView: View {
                         }
                         Spacer()
                         Button { store.forget(m) } label: { Image(systemName: "trash") }
-                            .buttonStyle(.borderless).help("Remove from project memory")
+                            .buttonStyle(.hover).help("Remove from project memory")
                     }
                     .padding(8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))

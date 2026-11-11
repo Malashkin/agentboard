@@ -116,6 +116,7 @@ struct ReplaySheet: View {
                                     .fill(steps[k].color.opacity(k == i ? 1 : 0.45))
                                     .frame(width: steps[k].kind == "prompt" ? 6 : 4, height: k == i ? 22 : 14)
                                     .id(k)
+                                    .modifier(PointerCursor())
                                     .onTapGesture { at = Double(k) }
                                     .help(steps[k].title.oneLine.trunc(120))
                             }

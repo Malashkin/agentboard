@@ -35,7 +35,7 @@ struct TimeBreakdown: View {
                             }
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hoverRow)
                         GeometryReader { g in
                             Capsule().fill(Color.accentColor.opacity(0.7))
                                 .frame(width: max(4, g.size.width * c.wall / maxWall))

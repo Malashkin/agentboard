@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Positioning: AgentBoard works on top of the agents you already run; comparison with agent platforms (Multica, Paperclip) in the README and `docs/product/positioning.md`.
 
 ### Added
-- **Jump to the agent's terminal.** A terminal button on every card (and in the answer panel) brings that
+- **Everything clickable reacts to the pointer.** One button style across the app: a highlight under the
+  pointer, a press state and the pointing-hand cursor; agent and task cards get an accent outline on hover,
+  expandable feed rows a soft background.
+- **Jump to the agent's terminal.** A labelled *Terminal* button on every card (and in the answer panel) brings that
   agent's own Terminal.app / iTerm2 tab to the front — through tmux (pane selected, client window raised)
   and herdr (`herdr agent focus`, then the window herdr runs in).
 - **Shortcuts from any app** (Carbon hot keys, no Accessibility permission): **⌥⌘J** jumps to the next

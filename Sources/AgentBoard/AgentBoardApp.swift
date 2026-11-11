@@ -52,6 +52,7 @@ struct AgentBoardApp: App {
         Window("AgentBoard", id: "main") {
             MainView()
                 .environmentObject(store)
+                .hoverButtons()
                 .frame(minWidth: 980, minHeight: 620)
         }
         .defaultSize(width: 1280, height: 820)
@@ -60,14 +61,14 @@ struct AgentBoardApp: App {
         }
 
         MenuBarExtra {
-            MenuBarView().environmentObject(store)
+            MenuBarView().environmentObject(store).hoverButtons()
         } label: {
             MenuBarLabel().environmentObject(store)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView().environmentObject(store)
+            SettingsView().environmentObject(store).hoverButtons()
         }
     }
 }
