@@ -91,9 +91,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         core.onChange = { store.scheduleReload() }
         core.notify = { title, body in Notifier.shared.post(title, body) }
-        core.notifyRequest = { p in Notifier.shared.postRequest(p) }
-        core.requestResolved = { id in Notifier.shared.remove(request: id) }
-        core.notifyWaitingAgent = { a, title, body in Notifier.shared.postWaiting(agentId: a.id, title: title, body: body) }
+        core.notifyRequest = { p in Notifier.shared.postRequest(p); Telegram.shared.request(p) }
+        core.requestResolved = { id in Notifier.shared.remove(request: id); Telegram.shared.resolved(request: id) }
+        core.notifyWaitingAgent = { a, title, body in
+            Notifier.shared.postWaiting(agentId: a.id, title: title, body: body)
+            Telegram.shared.waiting(a, title: title, body: body)
+        }
         core.onPrompt = { a, prompt in TaskAutopilot.shared.onPrompt(a, prompt) }
         core.onSessionEnd = { a in TaskAutopilot.shared.onSessionEnd(a) }
         core.onUnknownFolder = { cwd in DispatchQueue.main.async { store.noteUnknownFolder(cwd) } }
@@ -105,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startServer()
         AppVisibility.start()
         // Not in a side instance: it would take the shortcuts from the real app.
-        if !Integrations.isSideInstance { HotKeys.apply() }
+        if !Integrations.isSideInstance { HotKeys.apply(); Telegram.shared.load() }
         DispatchQueue.global(qos: .utility).async {
             let missing = !Integrations.claudeHooksInstalled()
             DispatchQueue.main.async { store.hooksMissing = missing }

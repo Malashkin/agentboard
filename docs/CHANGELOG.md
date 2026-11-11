@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a Gemini session gets a card, the feed, the rules, reservations (a refused edit comes back as
   `decision: deny`), messages (AfterAgent keeps it going when one is waiting) and terminal delivery.
   Needs Gemini CLI 0.26+.
+- **Answer from your phone (Telegram).** Settings → *Phone*: paste a bot token from @BotFather, send the shown
+  `/start <code>` to the bot, done. Requests arrive with buttons (Allow / Allow for session / Deny, the question's
+  options, Approve plan); replying to a request denies it with your comment or answers the question in your own
+  words; replying to a "waiting for you" message sends the text into that agent's session. Buttons disappear when
+  the request is answered elsewhere. By default only while you're away from the Mac (5 minutes without input).
+  The Mac long-polls Telegram — no inbound connection, no server; only the paired chat is listened to; the token
+  is kept in `~/.agentboard/telegram.json` (0600).
 - **Replay a session.** *Replay* in an agent's details steps through everything it did — requests, commands,
   edits, failures, answers — with a slider, play, a jump list of its requests and *Since I was away*. Every edit
   step now carries its diff (Edit / MultiEdit old → new, Write's new content; bounded), and two edits of the same
@@ -110,7 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 412 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 425 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

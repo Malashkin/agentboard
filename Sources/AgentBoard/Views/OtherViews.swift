@@ -199,6 +199,59 @@ struct IntegrationRow: View {
 
 // MARK: - Settings
 
+/// Telegram: requests and "waiting for you" on the phone, answered from there.
+struct PhoneSettings: View {
+    @State private var token = ""
+    @State private var busy = false
+    @State private var message: String?
+    @State private var tick = 0
+    @State private var onlyAway = Telegram.shared.config.onlyAway
+
+    var body: some View {
+        let tg = Telegram.shared
+        Form {
+            Section {
+                Text("Get agents' requests and “waiting for you” on your phone and answer them there: Allow / Deny, the question's options, or a reply that goes straight into the agent's session. Uses a Telegram bot you create; the Mac asks Telegram for your answers, so nothing reaches the Mac from outside.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if tg.isPaired {
+                Section("Connected") {
+                    LabeledContent("Bot") { Text("@" + tg.config.username) }
+                    Toggle("Only when I'm away from the Mac (5 minutes without keyboard or mouse)", isOn: $onlyAway)
+                        .onChange(of: onlyAway) { tg.setOnlyAway(onlyAway) }
+                    HStack {
+                        Button("Send a test message") { tg.sendTest { message = $0 } }
+                        Button("Disconnect", role: .destructive) { tg.disconnect() }
+                    }
+                }
+            } else if let code = tg.pairingCode {
+                Section("Pair your phone") {
+                    Text("In Telegram, open **@\(tg.config.username)** and send:").fixedSize(horizontal: false, vertical: true)
+                    Text("/start \(code)").font(.title2.monospaced()).textSelection(.enabled)
+                    Text("Only the chat that sends this code is listened to.").font(.caption).foregroundStyle(.secondary)
+                    Button("Cancel") { tg.disconnect() }
+                }
+            } else {
+                Section("Connect a bot") {
+                    Text("1. In Telegram, message @BotFather → /newbot → copy the token.\n2. Paste it here.")
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
+                    SecureField("Bot token", text: $token)
+                    Button(busy ? "Checking…" : "Connect") {
+                        busy = true
+                        tg.connect(token: token) { err in busy = false; message = err; token = "" }
+                    }
+                    .disabled(token.trimmed.isEmpty || busy)
+                    Text("The token is kept in ~/.agentboard/telegram.json, readable only by you.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+        }
+        .formStyle(.grouped)
+        .id(tick)
+        .onAppear { tg.onChange = { tick += 1; onlyAway = tg.config.onlyAway } }
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @AppStorage(Pref.port) private var port = 7777
@@ -249,6 +302,9 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             .tabItem { Label("General", systemImage: "gearshape") }
+
+            PhoneSettings()
+                .tabItem { Label("Phone", systemImage: "iphone") }
 
             Form {
                 Picker("When an agent runs git commit", selection: $commitMode) {

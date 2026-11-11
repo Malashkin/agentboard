@@ -39,6 +39,8 @@ updated: 2026-11-11
   tmux, herdr) to the front.
 - **⌥⌘J / ⌥⌘K from any app** — jump to the next agent that needs you; open the *Needs you* panel to answer
   requests and reply to waiting agents without switching windows.
+- **Phone (Telegram)** — requests with buttons and "waiting" messages you answer by replying; by default only
+  while you're away from the Mac.
 - **While you were away** — a short digest after a break (default 20 minutes).
 
 ## Coordination

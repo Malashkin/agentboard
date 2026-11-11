@@ -274,6 +274,50 @@ extension SelfTest {
                 && !Core.mention("src/au", covers: "src/auth/login.ts"),
               "a name matches the file anywhere, a folder what's below it — never a part of a name")
 
+        section("Phone (Telegram): buttons and replies map to the right answer", layer: "unit")
+        var perm = PendingCommit(id: "req-1", agentId: "ag", agentName: "Batman", projectId: "p", projectName: "Shop",
+                                 command: "rm -rf build", gitStatus: "", createdAt: 0, deadline: 0)
+        perm.kind = "permission"; perm.canAlwaysAllow = true
+        var ask = perm; ask.id = "req-2"; ask.kind = "question"
+        ask.questions = [AskQuestion(question: "Which DB?", header: "", options: [AskOption(label: "Postgres", description: ""),
+                                                                                  AskOption(label: "SQLite", description: "")], multiSelect: false)]
+        let pm = TelegramLink.message(for: perm)
+        check(pm.text.contains("Batman") && pm.text.contains("rm -rf build") && pm.buttons.first?.map(\.data) == ["a:req-1", "w:req-1", "d:req-1"],
+              "a permission request arrives with Allow / Allow for session / Deny")
+        check(TelegramLink.message(for: ask).buttons.flatMap { $0 }.map(\.label) == ["Postgres", "SQLite"], "a question arrives with its options")
+        check(TelegramLink.message(for: perm).buttons.flatMap { $0 }.allSatisfy { $0.data.utf8.count <= 64 }, "button data fits Telegram's 64 bytes")
+        let chat: Int64 = 4242
+        func cb(_ data: String, from: Int64 = chat) -> JSON { ["update_id": 1, "callback_query": ["id": "q", "data": data, "message": ["chat": ["id": from]]]] }
+        func msg(_ text: String, from: Int64 = chat, replyTo: Int64? = nil) -> JSON {
+            var m: JSON = ["chat": ["id": from], "text": text, "message_id": 9]
+            if let replyTo { m["reply_to_message"] = ["message_id": replyTo] }
+            return ["update_id": 2, "message": m]
+        }
+        let sentMap: [Int64: TelegramLink.Target] = [100: .request("req-1"), 101: .request("req-2"), 102: .agent("ag")]
+        func parse(_ u: JSON, chat c: Int64? = chat, code: String? = nil) -> TelegramLink.Action {
+            TelegramLink.parse(u, chat: c, code: code, sent: sentMap, pending: [perm, ask])
+        }
+        check(parse(cb("a:req-1")) == .decide(id: "req-1", allow: true, comment: "", answer: nil, always: false)
+                && parse(cb("w:req-1")) == .decide(id: "req-1", allow: true, comment: "", answer: nil, always: true)
+                && parse(cb("d:req-1")) == .decide(id: "req-1", allow: false, comment: "", answer: nil, always: false),
+              "Allow, Allow for session and Deny buttons")
+        check(parse(cb("o:req-2:1")) == .decide(id: "req-2", allow: true, comment: "", answer: "SQLite", always: false),
+              "an option button answers the question with that option")
+        check(parse(cb("o:req-2:7")) == .ignore, "an option that doesn't exist does nothing")
+        check(parse(msg("use DuckDB", replyTo: 101)) == .decide(id: "req-2", allow: true, comment: "", answer: "use DuckDB", always: false),
+              "replying to a question answers it in your own words")
+        check(parse(msg("not on prod!", replyTo: 100)) == .decide(id: "req-1", allow: false, comment: "not on prod!", answer: nil, always: false),
+              "replying to a permission request denies it with that comment")
+        check(parse(msg("also add tests", replyTo: 102)) == .reply(agent: "ag", text: "also add tests"),
+              "replying to a 'waiting' message sends the text into that agent's session")
+        check(parse(cb("a:req-1", from: 666)) == .ignore && parse(msg("hi", from: 666, replyTo: 102)) == .ignore,
+              "anyone other than the paired chat is ignored — buttons and replies alike")
+        check(parse(msg("/start 123456", from: 777), chat: nil, code: "123456") == .pair(chat: 777, code: "123456"),
+              "the chat that sends the pairing code becomes the paired one")
+        check(parse(msg("/start 000000", from: 777), chat: nil, code: "123456") == .ignore && parse(cb("a:req-1"), chat: nil) == .ignore,
+              "a wrong code pairs nothing, and nothing is obeyed before pairing")
+        check(parse(msg("/status")) == .status && parse(msg("what's up")) == .status, "anything else gets the current status")
+
         section("Who needs you: the ⌥⌘J order", layer: "unit")
         let people = [boardAgent("idle-new", "idle", started: 1, seen: 9_900),
                       boardAgent("idle-old", "idle", started: 1, seen: 9_000),

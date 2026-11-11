@@ -89,6 +89,9 @@ AgentBoard sits next to your agents and turns all of that into one live board.
 - **Jump straight to the agent.** A terminal button on every card brings that agent's own tab to the
   front (Terminal.app, iTerm2, tmux, herdr). From any app, **⌥⌘J** takes you to the next agent that needs
   you, and **⌥⌘K** opens a small *Needs you* panel to answer everything without leaving what you're doing.
+- **Answer from your phone.** Pair a Telegram bot in Settings → Phone and requests reach you with Allow /
+  Deny / the question's options; reply to a "waiting" message and the text goes into that agent's session.
+  By default only while you're away from the Mac. No server: the Mac polls Telegram for your answers.
 - **"While you were away".** Come back after a break and get a short digest: what was finished,
   what's waiting for you, who got stuck.
 
@@ -200,13 +203,16 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
   written by `claude -p` with your Claude Code login (no tools, no saved session) — so agent
   activity is sent to Anthropic, the same provider your agents already use. All of them can be
   turned off in Settings.
+- The phone link is off until you pair a Telegram bot. Once paired, the text of requests and "waiting" messages
+  (commands, questions, the agent's last words) goes through Telegram's servers to your chat; only that chat is
+  listened to, and the bot token stays in `~/.agentboard/telegram.json` (owner-only).
 - Hook and settings changes are backed up (`*.agentboard-backup-*`) and only AgentBoard's own
   entries are ever touched.
 
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 412 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 425 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

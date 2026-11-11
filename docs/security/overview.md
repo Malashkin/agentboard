@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Security overview
@@ -65,12 +65,21 @@ Status and order: [product/roadmap.md](../product/roadmap.md).
 
 ## Data leaving the Mac
 
-Only through `claude -p` calls (narrator, task titles, away digest, evening summary), using the user's
+Through `claude -p` calls (narrator, task titles, away digest, evening summary), using the user's
 Claude Code login. All can be disabled in Settings.
+
+Through Telegram, only if the human pairs a bot (Settings → Phone, off by default): the text of requests and
+"waiting" messages goes to their chat. Controls: outbound long polling only (no listening port, nothing reaches
+the Mac from outside); a one-time 6-digit pairing code binds a single chat id, and every update from any other
+chat — buttons and replies — is ignored; nothing is obeyed before pairing; the bot token is stored in
+`~/.agentboard/telegram.json` with 0600. Residual: whoever controls that Telegram account can answer the
+agents' requests — treat it like the Mac's unlock.
 
 ## Residual risk
 
 - Processes running as **you** can read the token file — same-user code is outside this model (it could edit your
   Claude settings anyway). The token stops other users, sandboxed apps and web pages.
 - Reservations and the pre-commit guard are advisory (`git commit --no-verify` bypasses them; hooks fail open).
-- Peer framing lowers, but cannot remove, the chance that a model follows an injected instruction.
+- Peer framing lowers, but cannot remove, the chance that a model follows an injected instruction. The same
+  framing covers project memory facts and briefings written from another agent's session.
+- Global shortcuts (⌥⌘J / ⌥⌘K) only bring windows forward and open the answer panel; they can't act on their own.
