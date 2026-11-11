@@ -7,6 +7,30 @@ AgentBoard is a native macOS app that shows what every Claude Code and Codex ses
 keeps them out of each other's way, lets you answer them from one place, and tells you at the end
 of the day what got done — per project and per client.
 
+**It works on top of the agents you already run.** Keep your terminals, your Claude Code and Codex
+sessions, your way of working: AgentBoard plugs into them through their own hooks and MCP, and every
+session shows up on the board by itself. No server, no account, no new platform to move your work
+into — one native app, everything stays on your Mac.
+
+### How it differs from agent platforms
+
+Platforms like [Multica](https://github.com/multica-ai/multica) and [Paperclip](https://github.com/paperclipai/paperclip)
+*run* the agents for you: you file tickets, the platform launches agents in its own environment, and you
+manage them like a team (or, in Paperclip's case, like a whole autonomous company). AgentBoard does the
+opposite: **you** stay the one driving your agents in your terminals, and AgentBoard gives you the view,
+the coordination and the controls.
+
+| | AgentBoard | Agent platforms (Multica, Paperclip) |
+|---|---|---|
+| Where agents run | your own terminals, the way you already work | inside the platform, launched from tasks |
+| Setup | one native macOS app, SQLite, localhost only | server, database, web UI, Docker or cloud |
+| Your role | you drive; the board shows everything and lets you answer | you assign; agents work on their own |
+| Live interactive sessions | the main case: permissions, questions, plans, replies | mostly background runs per task |
+| Keeping agents apart | file reservations, git hooks, conflict warnings | task assignment, org charts, approvals |
+
+Choose a platform if you want agents to work autonomously off a ticket queue for a team.
+Choose AgentBoard if you want to keep working with your agents directly — just with all of them in view.
+
 ---
 
 ## The problem

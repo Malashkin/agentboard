@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Docs
+- Positioning: AgentBoard works on top of the agents you already run; comparison with agent platforms (Multica, Paperclip) in the README and `docs/product/positioning.md`.
+
 ### Added
 - **Terminal delivery through [herdr](https://herdr.dev).** Herdr starts every agent in a
   pseudo-terminal it creates itself, so no Terminal.app tab, iTerm2 session or tmux pane owns that
