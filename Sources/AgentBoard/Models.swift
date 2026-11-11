@@ -119,10 +119,17 @@ struct Agent: Identifiable, Hashable {
         switch tool {
         case "claude": return "Claude Code"
         case "codex": return "Codex"
+        case "gemini": return "Gemini CLI"
         default: return tool.capitalized
         }
     }
-    var toolIcon: String { tool == "codex" ? "chevron.left.forwardslash.chevron.right" : "sparkle" }
+    var toolIcon: String {
+        switch tool {
+        case "codex": return "chevron.left.forwardslash.chevron.right"
+        case "gemini": return "diamond"
+        default: return "sparkle"
+        }
+    }
 
     func displayStatus(staleMinutes: Double, at date: Date = Date()) -> AgentStatus {
         if status == "ended" { return .ended }

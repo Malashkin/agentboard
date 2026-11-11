@@ -20,7 +20,8 @@ struct AgentBoardApp: App {
             for c in found.prefix(20) { print("  \(c.path)  (\(c.sessions) sessions, \(c.toolsLabel))") }
             exit(0)
         }
-        if args.contains("--install-claude") || args.contains("--install-codex") || args.contains("--uninstall-claude") {
+        if args.contains("--install-claude") || args.contains("--install-codex") || args.contains("--uninstall-claude")
+            || args.contains("--install-gemini") || args.contains("--uninstall-gemini") {
             Pref.registerDefaults()
             Integrations.writeBridge()
             func step(_ name: String, _ work: () throws -> Void) {
@@ -33,6 +34,12 @@ struct AgentBoardApp: App {
             if args.contains("--install-claude") {
                 step("Claude Code hooks → ~/.claude/settings.json") { try Integrations.installClaudeHooks() }
                 step("Claude Code MCP agentboard → \(Integrations.mcpURL)") { try Integrations.installClaudeMCP() }
+            }
+            if args.contains("--install-gemini") {
+                step("Gemini CLI hooks + MCP → ~/.gemini/settings.json") { try Integrations.installGemini() }
+            }
+            if args.contains("--uninstall-gemini") {
+                step("Gemini CLI hooks + MCP removed") { try Integrations.uninstallGemini() }
             }
             if args.contains("--install-codex") {
                 step("Codex → ~/.codex/config.toml") { try Integrations.installCodex() }

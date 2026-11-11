@@ -7,7 +7,7 @@ updated: 2026-11-11
 # Features
 
 ## Visibility
-- **Agent cards** — one per Claude Code / Codex session, with a unique superhero name (100 built in),
+- **Agent cards** — one per Claude Code / Codex / Gemini CLI session, with a unique superhero name (100 built in),
   status (working · waiting for you · idle · stuck · finished · inactive), project, branch, current task,
   touched files, last action and a quick reply field.
   *"Waiting for you" means the agent cannot continue without an answer — a permission, a question,

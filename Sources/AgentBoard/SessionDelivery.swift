@@ -170,7 +170,7 @@ enum SessionDelivery {
 
     /// `ps -t <tty> -o stat=,comm=` output → is a claude/codex process in the terminal's foreground group (`+`)?
     static func agentInForeground(psOutput: String, tool: String) -> Bool {
-        let names = tool == "codex" ? ["codex", "codex-cli"] : ["claude", "node"]
+        let names = tool == "codex" ? ["codex", "codex-cli"] : tool == "gemini" ? ["gemini", "node"] : ["claude", "node"]
         return psOutput.split(separator: "\n").contains { line in
             let f = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
             guard f.count == 2, f[0].contains("+") else { return false }

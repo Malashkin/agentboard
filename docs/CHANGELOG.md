@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is full the moment the app starts — including sessions opened before the hooks were installed. When its
   hooks start arriving they land on the same card. Background `claude -p` runs and cards the human ended are
   left alone; a session outside every project feeds the *Suggested* list instead.
+- **Gemini CLI.** Integrations → *Gemini CLI* (or `AgentBoard --install-gemini`) adds hooks and the
+  `agentboard` MCP server to `~/.gemini/settings.json` (backed up; only AgentBoard's entries touched; the file
+  becomes owner-only because it holds the token). Gemini's events and tools are translated to Claude Code's
+  (BeforeTool → PreToolUse, `run_shell_command` → Bash, `replace` → Edit…) and run through the same handler,
+  so a Gemini session gets a card, the feed, the rules, reservations (a refused edit comes back as
+  `decision: deny`), messages (AfterAgent keeps it going when one is waiting) and terminal delivery.
+  Needs Gemini CLI 0.26+.
 - **Connect in one click.** While Claude Code hooks aren't installed, a banner over the board offers
   *Connect Claude Code* (hooks + MCP).
 
@@ -86,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 363 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 386 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

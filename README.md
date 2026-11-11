@@ -3,11 +3,11 @@
 # AgentBoard
 
 **Mission control for a team of AI coding agents on your Mac.**
-AgentBoard is a native macOS app that shows what every Claude Code and Codex session is doing,
+AgentBoard is a native macOS app that shows what every Claude Code, Codex and Gemini CLI session is doing,
 keeps them out of each other's way, lets you answer them from one place, and tells you at the end
 of the day what got done — per project and per client.
 
-**It works on top of the agents you already run.** Keep your terminals, your Claude Code and Codex
+**It works on top of the agents you already run.** Keep your terminals, your Claude Code, Codex and Gemini CLI
 sessions, your way of working: AgentBoard plugs into them through their own hooks and MCP, and every
 session shows up on the board by itself. No server, no account, no new platform to move your work
 into — one native app, everything stays on your Mac.
@@ -55,7 +55,7 @@ AgentBoard sits next to your agents and turns all of that into one live board.
 ## What it does
 
 ### See everything, live
-- **One card per terminal.** Every Claude Code or Codex session becomes an agent with its own
+- **One card per terminal.** Every Claude Code, Codex or Gemini CLI session becomes an agent with its own
   superhero name (100 built in — Batman, Storm, Groot…), unique across all open sessions.
   The card shows status (working / waiting for you / idle / stuck / finished), project, branch,
   current task, the files it touches and its last action.
@@ -145,18 +145,19 @@ Requires macOS 14+ and the Command Line Tools (`xcode-select --install`). Xcode 
 
 Then, in the app:
 1. **Integrations → Connect**: Claude Code hooks and MCP server; Codex hooks and MCP server if you use Codex
-   (Codex asks once to trust the new hooks — accept).
+   (Codex asks once to trust the new hooks — accept); Gemini CLI hooks and MCP server if you use Gemini CLI.
 2. **Add project**: pick a repository. Its git hooks are installed and its past sessions imported.
 3. Restart Claude Code sessions that were already open.
 
 If AgentBoard isn't running, the hooks do nothing and never get in the agents' way.
-From the command line: `AgentBoard --install-claude`, `--install-codex`, `--uninstall-claude`.
+From the command line: `AgentBoard --install-claude`, `--install-codex`, `--install-gemini`, `--uninstall-claude`, `--uninstall-gemini`.
 
 ## How it works
 
 ```
 Claude Code ─hooks─▶ ~/.agentboard/bin/agentboard-hook ─HTTP─▶ AgentBoard.app (127.0.0.1:7777)
 Codex       ─hooks─▶        (same bridge)                       │  SQLite, live UI
+Gemini CLI  ─hooks─▶        (same bridge, translated)           │
             ◀── context, decisions, messages ───────────────────┤
 agents ─MCP (http://127.0.0.1:7777/mcp)─────────────────────────▶│
 git ─pre-commit / post-commit─▶ agentboard-hook ────────────────▶│
@@ -194,7 +195,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 363 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 386 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

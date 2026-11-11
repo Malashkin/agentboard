@@ -1320,6 +1320,13 @@ final class Core {
             handleClaudeHook(jj, agentTool: req.query["tool"] == "codex" ? "codex" : "claude") { data in
                 if let data { reply(HTTPResponse(status: 200, body: data)) } else { reply(.empty()) }
             }
+        case ("POST", "/hook/gemini"):
+            guard let raw = body as? JSON, var j = GeminiHooks.toClaude(raw) else { reply(.empty()); return }
+            if let tty = req.query["tty"], Self.isTTYName(tty) { j["_tty"] = "/dev/" + tty }
+            let event = raw.s("hook_event_name")
+            handleClaudeHook(j, agentTool: "gemini") { data in
+                if let out = GeminiHooks.fromClaude(event: event, data) { reply(HTTPResponse(status: 200, body: out)) } else { reply(.empty()) }
+            }
         case ("POST", "/hook/codex"):
             if let j = body as? JSON { handleCodexNotify(j) }
             reply(.empty())

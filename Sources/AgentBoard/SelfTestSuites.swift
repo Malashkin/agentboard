@@ -237,6 +237,34 @@ extension SelfTest {
                 && AgentStatus.working.sortRank < AgentStatus.idle.sortRank,
               "only running / not running decides the group; everything else is ordered by start time")
 
+        section("Gemini CLI events in Claude Code's terms", layer: "unit")
+        let gTool = GeminiHooks.toClaude(["hook_event_name": "BeforeTool", "session_id": "s", "cwd": "/r",
+                                          "tool_name": "run_shell_command", "tool_input": ["command": "ls"]])
+        check(gTool?.s("hook_event_name") == "PreToolUse" && gTool?.s("tool_name") == "Bash"
+                && (gTool?["tool_input"] as? JSON)?.s("command") == "ls", "BeforeTool run_shell_command → PreToolUse Bash")
+        let gRead = GeminiHooks.toClaude(["hook_event_name": "AfterTool", "session_id": "s", "tool_name": "read_file",
+                                          "tool_input": ["absolute_path": "/r/a.swift"], "tool_response": ["llmContent": "x"]])
+        check(gRead?.s("hook_event_name") == "PostToolUse" && gRead?.s("tool_name") == "Read"
+                && (gRead?["tool_input"] as? JSON)?.s("file_path") == "/r/a.swift", "read_file's absolute_path becomes file_path")
+        let gFail = GeminiHooks.toClaude(["hook_event_name": "AfterTool", "session_id": "s", "tool_name": "run_shell_command",
+                                          "tool_input": ["command": "make"], "tool_response": ["error": "exit 2"]])
+        check(gFail?.s("hook_event_name") == "PostToolUseFailure" && gFail?.s("error") == "exit 2",
+              "a tool that failed counts as a failure (the loop detector sees it)")
+        check(GeminiHooks.toClaude(["hook_event_name": "AfterAgent", "session_id": "s", "prompt_response": "Done."])?
+                .s("last_assistant_message") == "Done.", "AfterAgent → Stop with the answer")
+        check(GeminiHooks.toClaude(["hook_event_name": "AfterTool", "session_id": "s", "tool_name": "mcp_agentboard_board"])?
+                .s("tool_name") == "mcp__agentboard_board", "MCP tools keep their server prefix")
+        check(GeminiHooks.toClaude(["hook_event_name": "BeforeModel", "session_id": "s"]) == nil,
+              "model-level events are not forwarded (they say nothing about the work)")
+        let gDeny = GeminiHooks.fromClaude(event: "BeforeTool", jsonData(["hookSpecificOutput": ["hookEventName": "PreToolUse",
+            "permissionDecision": "deny", "permissionDecisionReason": "reserved by Batman"]])).flatMap { parseJSON($0) as? JSON }
+        check(gDeny?.s("decision") == "deny" && gDeny?.s("reason") == "reserved by Batman", "a refusal → decision: deny with the reason")
+        let gCtx = GeminiHooks.fromClaude(event: "BeforeAgent", jsonData(["hookSpecificOutput": ["hookEventName": "UserPromptSubmit",
+            "additionalContext": "Batman edits auth"]])).flatMap { parseJSON($0) as? JSON }
+        check((gCtx?["hookSpecificOutput"] as? JSON)?.s("additionalContext") == "Batman edits auth" && gCtx?["decision"] == nil,
+              "context passes through unchanged, without a decision")
+        check(GeminiHooks.fromClaude(event: "AfterTool", nil) == nil, "nothing to say → no output (Gemini wants silence)")
+
         section("Who needs you: the ⌥⌘J order", layer: "unit")
         let people = [boardAgent("idle-new", "idle", started: 1, seen: 9_900),
                       boardAgent("idle-old", "idle", started: 1, seen: 9_000),
@@ -503,6 +531,36 @@ extension SelfTest {
             check(!left.contains { $0.s("command").contains("agentboard-hook") } && left.contains { $0.s("command") == "bash herdr.sh session" },
                   "uninstall removes only AgentBoard's hooks")
         }
+        if Integrations.geminiSettings.hasPrefix(root + "/gemini-home/") {
+            let gdir = Integrations.geminiDir
+            try? FileManager.default.createDirectory(atPath: gdir, withIntermediateDirectories: true)
+            try? jsonData(["hooks": ["AfterAgent": [["hooks": [["type": "command", "command": "notify-me.sh"]]]]],
+                           "mcpServers": ["other": ["command": "x"]], "theme": "Dracula"])
+                .write(to: URL(fileURLWithPath: Integrations.geminiSettings))
+            try? Integrations.installGemini()
+            try? Integrations.installGemini()
+            let g = (try? Data(contentsOf: URL(fileURLWithPath: Integrations.geminiSettings))).flatMap { parseJSON($0) as? JSON } ?? [:]
+            let gh = g["hooks"] as? JSON ?? [:]
+            func gOurs(_ ev: String) -> Int {
+                ((gh[ev] as? [JSON]) ?? []).flatMap { ($0["hooks"] as? [JSON]) ?? [] }.filter { $0.s("command").contains("agentboard-hook gemini") }.count
+            }
+            check(Integrations.geminiEvents.allSatisfy { gOurs($0.event) == 1 }, "Gemini CLI: every hook installed exactly once (installed twice)")
+            let after = ((gh["AfterAgent"] as? [JSON]) ?? []).flatMap { ($0["hooks"] as? [JSON]) ?? [] }
+            check(after.contains { $0.s("command") == "notify-me.sh" } && g.s("theme") == "Dracula"
+                    && ((g["mcpServers"] as? JSON)?["other"]) != nil,
+                  "Gemini CLI: other hooks, servers and settings are kept")
+            check(Integrations.geminiInstalled(), "Gemini CLI: installed state detected (hooks + MCP with the token)")
+            check(((gh["BeforeTool"] as? [JSON])?.first { (($0["hooks"] as? [JSON]) ?? []).contains { $0.s("command").contains("agentboard") } }?["hooks"] as? [JSON])?
+                    .first?["timeout"] as? Int ?? 0 > 60_000,
+                  "Gemini CLI: timeouts are in milliseconds and leave room for an approval")
+            let mode = ((try? FileManager.default.attributesOfItem(atPath: Integrations.geminiSettings))?[.posixPermissions] as? NSNumber)?.intValue ?? 0
+            check(mode & 0o077 == 0, "Gemini CLI: settings.json holds the token, so it is owner-only", String(mode, radix: 8))
+            try? Integrations.uninstallGemini()
+            check(!Integrations.geminiInstalled()
+                    && ((try? String(contentsOfFile: Integrations.geminiSettings)) ?? "").contains("notify-me.sh")
+                    && !((try? String(contentsOfFile: Integrations.geminiSettings)) ?? "").contains("agentboard-hook"),
+                  "Gemini CLI: uninstall removes only AgentBoard's entries")
+        }
         if Integrations.codexHooks.hasPrefix(codexDir + "/") {
             try? FileManager.default.createDirectory(atPath: codexDir, withIntermediateDirectories: true)
             try? jsonData(["hooks": ["Stop": [["hooks": [["type": "command", "command": "my-stop.sh"]]]]]]).write(to: URL(fileURLWithPath: Integrations.codexHooks))
@@ -562,6 +620,40 @@ extension SelfTest {
             if !recorded { Thread.sleep(forTimeInterval: 0.1) }
         }
         check(recorded, "post-commit hook reports the commit to the board")
+
+        section("Gemini CLI through the real bridge")
+        func gemini(_ j: JSON) -> JSON? {
+            let r = Shell.run(Integrations.hookPath, ["gemini"], input: String(decoding: jsonData(j), as: UTF8.self), env: gitEnv, timeout: 30)
+            return r.out.trimmed.isEmpty ? nil : parseJSON(Data(r.out.utf8)) as? JSON
+        }
+        let start = gemini(["hook_event_name": "SessionStart", "session_id": "gem1", "cwd": repo, "source": "startup",
+                            "timestamp": "2026-11-11T10:00:00Z"])
+        let gem = core.q.sync { core.db.query("SELECT * FROM agents WHERE tool='gemini' AND session_id='gem1'").first.map(Agent.init) }
+        check(gem != nil && gem?.projectId == project.id, "a Gemini CLI session gets its own card in the project")
+        check(gem?.toolLabel == "Gemini CLI", "…labelled Gemini CLI")
+        check(((start?["hookSpecificOutput"] as? JSON)?.s("additionalContext") ?? "").contains("agent_id"),
+              "…and is told the team rules at session start, in Gemini's format")
+        _ = gemini(["hook_event_name": "BeforeAgent", "session_id": "gem1", "cwd": repo, "prompt": "Add a health check endpoint"])
+        check(core.q.sync { core.agent(id: gem?.id ?? "")?.lastPrompt }?.contains("health check") == true, "its prompt is recorded")
+        let deny = gemini(["hook_event_name": "BeforeTool", "session_id": "gem1", "cwd": repo, "tool_name": "replace",
+                           "tool_input": ["file_path": repo + "/src/auth/login.ts", "old_string": "a", "new_string": "b"]])
+        check(deny?.s("decision") == "deny" && (deny?.s("reason") ?? "").contains(holder.name),
+              "editing a file another agent reserved is refused, in Gemini's format (decision: deny + reason)",
+              deny.map { jsonString($0) }?.trunc(200) ?? "nil")
+        _ = gemini(["hook_event_name": "BeforeTool", "session_id": "gem1", "cwd": repo, "tool_name": "run_shell_command",
+                    "tool_input": ["command": "npm test"]])
+        _ = gemini(["hook_event_name": "AfterTool", "session_id": "gem1", "cwd": repo, "tool_name": "run_shell_command",
+                    "tool_input": ["command": "npm test"], "tool_response": ["llmContent": "ok", "returnDisplay": "12 passed"]])
+        check(core.q.sync { !core.db.query("SELECT 1 FROM events WHERE agent_id=? AND title LIKE '%npm test%'", [gem?.id ?? ""]).isEmpty },
+              "its shell command lands in the feed like a Claude Code one")
+        _ = core.q.sync { core.sendMessage(project: project.id, to: gem?.id ?? "", from: nil, text: "also add a readiness probe") }
+        let stop = gemini(["hook_event_name": "AfterAgent", "session_id": "gem1", "cwd": repo, "prompt": "x",
+                           "prompt_response": "Added /health.", "stop_hook_active": false])
+        check(stop?.s("decision") == "deny" && (stop?.s("reason") ?? "").contains("readiness probe"),
+              "a message waiting at the end of its turn keeps it going (AfterAgent deny with the message)",
+              stop.map { jsonString($0) }?.trunc(200) ?? "nil")
+        _ = gemini(["hook_event_name": "SessionEnd", "session_id": "gem1", "cwd": repo, "reason": "exit"])
+        check(core.q.sync { core.agent(id: gem?.id ?? "")?.status } == "ended", "its session end closes the card")
         server?.stop()
     }
 }
@@ -778,7 +870,7 @@ extension SelfTest {
               String(mode(Auth.tokenPath), radix: 8))
         check(mode(Integrations.baseDir) == 0o700, "~/.agentboard is owner-only (0700)", String(mode(Integrations.baseDir), radix: 8))
         check(((try? String(contentsOfFile: Auth.headerFilePath)) ?? "") == "X-AgentBoard-Token: \(Auth.token)\n", "curl header file matches the token")
-        check(Integrations.hookScript.components(separatedBy: "curl -sf -H @\"$AUTH\"").count - 1 == 5,
+        check(Integrations.hookScript.components(separatedBy: "curl -sf -H @\"$AUTH\"").count - 1 == 6,
               "every curl in the bridge sends the token from the file (never on the command line)")
 
         let pf = root + "/prompt-test.txt"

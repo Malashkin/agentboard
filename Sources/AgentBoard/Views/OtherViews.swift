@@ -80,6 +80,8 @@ struct IntegrationsView: View {
     @State private var mcp = false
     @State private var codex = false
     @State private var codexAvailable = false
+    @State private var gemini = false
+    @State private var geminiAvailable = false
     @State private var busy = false
     @State private var message: String?
 
@@ -113,6 +115,15 @@ struct IntegrationsView: View {
                     install: { run { try Integrations.installCodex() } },
                     uninstall: nil)
 
+                IntegrationRow(
+                    title: "Gemini CLI",
+                    detail: geminiAvailable
+                        ? "Adds hooks and the agentboard MCP server to ~/.gemini/settings.json (with a backup). Gemini CLI sessions get cards, the feed, reservations, messages and the rules, like Claude Code. Needs Gemini CLI 0.26 or newer."
+                        : "Gemini CLI isn’t installed on this Mac. You can connect it in advance; the config will be written to ~/.gemini/settings.json.",
+                    installed: gemini, busy: busy,
+                    install: { run { try Integrations.installGemini() } },
+                    uninstall: { run { try Integrations.uninstallGemini() } })
+
                 Card {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Technical details").font(.headline)
@@ -139,7 +150,8 @@ struct IntegrationsView: View {
         DispatchQueue.global().async {
             let h = Integrations.claudeHooksInstalled(), m = Integrations.claudeMCPInstalled()
             let c = Integrations.codexInstalled(), ca = Integrations.codexAvailable
-            DispatchQueue.main.async { hooks = h; mcp = m; codex = c; codexAvailable = ca }
+            let g = Integrations.geminiInstalled(), ga = Integrations.geminiAvailable
+            DispatchQueue.main.async { hooks = h; mcp = m; codex = c; codexAvailable = ca; gemini = g; geminiAvailable = ga }
         }
     }
 

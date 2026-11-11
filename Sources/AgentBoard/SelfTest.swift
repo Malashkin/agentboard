@@ -34,6 +34,7 @@ enum SelfTest {
         setenv("AGENTBOARD_BRIDGE_DIR", root + "/bridge", 1)
         setenv("CLAUDE_CONFIG_DIR", root + "/claude", 1)
         setenv("CODEX_HOME", root + "/codex", 1)
+        setenv("GEMINI_CLI_HOME", root + "/gemini-home", 1)
         setenv("AGENTBOARD_WORKTREE_ROOT", root + "/worktrees", 1)
         for (k, v) in ["GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "t@t"] {
             setenv(k, v, 1)

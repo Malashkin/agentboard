@@ -11,6 +11,8 @@ enum Integrations {
     /// so an isolated run never edits the real ~/.claude or ~/.codex.
     static var claudeDir: String { env("CLAUDE_CONFIG_DIR") ?? home + "/.claude" }
     static var codexDir: String { env("CODEX_HOME") ?? home + "/.codex" }
+    static var geminiDir: String { env("GEMINI_CLI_HOME").map { $0 + "/.gemini" } ?? home + "/.gemini" }
+    static var geminiSettings: String { geminiDir + "/settings.json" }
     static var claudeSettings: String { claudeDir + "/settings.json" }
     static var codexConfig: String { codexDir + "/config.toml" }
     private static func env(_ k: String) -> String? {
@@ -41,6 +43,12 @@ enum Integrations {
         TTY=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
         curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
           --data-binary @- "$URL/hook/claude?tool=codex&tty=$TTY" 2>/dev/null
+        ;;
+      gemini)
+        # Gemini CLI hooks (~/.gemini/settings.json): translated to Claude Code's format by the app.
+        TTY=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
+        curl -sf -H @"$AUTH" --connect-timeout 1 --max-time 3700 -X POST -H 'Content-Type: application/json' \\
+          --data-binary @- "$URL/hook/gemini?tty=$TTY" 2>/dev/null
         ;;
       codex)
         # Codex `notify` passes the event JSON as the last argument.
@@ -205,6 +213,76 @@ enum Integrations {
         if let claude = Shell.which("claude") {
             _ = Shell.run(claude, ["mcp", "remove", "--scope", "user", "agentboard"], timeout: 30)
         }
+    }
+
+    // MARK: Gemini CLI
+
+    /// Gemini CLI events AgentBoard listens to; timeouts in milliseconds (Gemini's unit).
+    static var geminiEvents: [(event: String, matcher: String?, timeoutMs: Int)] {
+        [("SessionStart", nil, 10_000),
+         ("BeforeAgent", nil, 10_000),
+         ("BeforeTool", ".*", (Int(AppSettings.approvalTimeout) + 30) * 1000),
+         ("AfterTool", ".*", 5_000),
+         ("AfterAgent", nil, 10_000),
+         ("Notification", nil, 10_000),
+         ("SessionEnd", nil, 10_000)]
+    }
+
+    static var geminiAvailable: Bool {
+        Shell.which("gemini") != nil || FileManager.default.fileExists(atPath: geminiSettings)
+    }
+
+    private static var geminiMCPEntry: JSON {
+        ["httpUrl": mcpURL, "headers": ["Authorization": bearer], "trust": true]
+    }
+
+    static func geminiInstalled() -> Bool {
+        guard let s = readJSON(geminiSettings), let hooks = s["hooks"] as? JSON else { return false }
+        let mcp = (s["mcpServers"] as? JSON)?["agentboard"] as? JSON
+        return mcp?.s("httpUrl") == mcpURL && (mcp?["headers"] as? JSON)?.s("Authorization") == bearer
+            && geminiEvents.allSatisfy { ev in
+                ((hooks[ev.event] as? [JSON]) ?? []).contains { g in
+                    ((g["hooks"] as? [JSON]) ?? []).contains { $0.s("command").contains(marker) }
+                }
+            }
+    }
+
+    /// Hooks for every event above plus the `agentboard` MCP server, in ~/.gemini/settings.json.
+    /// Only AgentBoard's own entries are replaced; the file is backed up first.
+    static func installGemini() throws {
+        writeBridge()
+        try FileManager.default.createDirectory(atPath: geminiDir, withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: geminiSettings) && readJSON(geminiSettings) == nil {
+            throw NSError(domain: "AgentBoard", code: 2, userInfo: [NSLocalizedDescriptionKey:
+                "~/.gemini/settings.json contains invalid JSON — fix it manually and try again"])
+        }
+        backup(geminiSettings)
+        var s = readJSON(geminiSettings) ?? [:]
+        var hooks = strippedHooks(s["hooks"] as? JSON ?? [:])
+        for ev in geminiEvents {
+            var group: JSON = ["hooks": [["type": "command", "name": "agentboard", "command": "\(hookPath) gemini",
+                                          "timeout": ev.timeoutMs]]]
+            if let m = ev.matcher { group["matcher"] = m }
+            hooks[ev.event] = ((hooks[ev.event] as? [JSON]) ?? []) + [group]
+        }
+        s["hooks"] = hooks
+        var servers = s["mcpServers"] as? JSON ?? [:]
+        servers["agentboard"] = geminiMCPEntry
+        s["mcpServers"] = servers
+        try writeJSON(s, geminiSettings)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: geminiSettings)   // holds the token
+    }
+
+    static func uninstallGemini() throws {
+        guard var s = readJSON(geminiSettings) else { return }
+        backup(geminiSettings)
+        let hooks = strippedHooks(s["hooks"] as? JSON ?? [:])
+        if hooks.isEmpty { s.removeValue(forKey: "hooks") } else { s["hooks"] = hooks }
+        if var servers = s["mcpServers"] as? JSON {
+            servers.removeValue(forKey: "agentboard")
+            if servers.isEmpty { s.removeValue(forKey: "mcpServers") } else { s["mcpServers"] = servers }
+        }
+        try writeJSON(s, geminiSettings)
     }
 
     // MARK: Codex
