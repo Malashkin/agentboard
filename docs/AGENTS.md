@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 applies-to: d4917f9
 ---
 
@@ -41,11 +41,12 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 | Build (release) | `swift build -c release` |
 | Build the .app bundle | `./scripts/build-app.sh` → `dist/AgentBoard.app` |
 | Build + install to /Applications | `./scripts/build-app.sh --install` |
-| Test (self-test, 262 checks) | `./scripts/test.sh` (or `.build/release/AgentBoard --self-test`) |
+| Test (self-test, 426 checks) | `./scripts/test.sh` (or `.build/release/AgentBoard --self-test`) |
 | Mutation gate | `scripts/mutation-check.py /tmp/agentboard-mutants` |
 | Run a debug instance | `.build/debug/AgentBoard -port 7788` |
 | Run fully isolated | `AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788` |
-| Install integrations from CLI | `/Applications/AgentBoard.app/Contents/MacOS/AgentBoard --install-claude [--install-codex]` |
+| Install integrations from CLI | `/Applications/AgentBoard.app/Contents/MacOS/AgentBoard --install-claude [--install-codex] [--install-gemini]` |
+| Dry-run project discovery | `AgentBoard --discover` |
 | Lint / format | none configured (follow the conventions below) |
 | Typecheck | the Swift compiler (`swift build`) |
 
@@ -72,7 +73,7 @@ coordinates them (file reservations, stuck detection, messages), and reports the
 | `dist/AppIcon.icns` | Cached icon; delete it to regenerate from `scripts/make-icon.swift` |
 | `docs/assets/logo.png` | Rendered by `swift scripts/make-icon.swift <iconset> docs/assets/logo.png` |
 | `~/.agentboard/bin/agentboard-hook` | Rewritten by the app at every launch from `Integrations.hookScript` |
-| Entries containing `agentboard-hook` in `~/.claude/settings.json`, `~/.codex/hooks.json`, repo git hooks | Managed by the app's installers |
+| Entries containing `agentboard-hook` in `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/settings.json`, repo git hooks | Managed by the app's installers |
 | `SECURITY_AUDIT_REPORT.md` | Confidential, git-ignored on purpose |
 
 ## Known gotchas
@@ -93,4 +94,12 @@ coordinates them (file reservations, stuck detection, messages), and reports the
   Use a Core Animation layer (see `PulseDot` in `Theme.swift`).
 - **Isolated runs:** set `AGENTBOARD_DATA_DIR`, `AGENTBOARD_BRIDGE_DIR`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` together —
   the bridge then uses its own port file and installers edit only the test folders.
+- **Buttons:** use the hover styles from `Views/Components.swift` (`.hover`, `.hoverBordered`, `.hoverProminent`,
+  `.hoverRow`, `.hoverHighlight()`), not `.borderless` / `.bordered` / `.plain` — everything clickable must react to the pointer.
+- **AppleScript** goes through `SessionDelivery.osa` (in-process `NSAppleScript`, on the main thread) — a child
+  `osascript` is refused by macOS without a prompt. `Info.plist` must keep `NSAppleEventsUsageDescription`.
+- **Claude Code hooks have no terminal**: the tty the bridge reports is empty; the agent's terminal comes from
+  `~/.claude/sessions/<pid>.json` (`SessionDelivery.terminalTTY`).
+- **Side instances** (`AGENTBOARD_DATA_DIR` / `AGENTBOARD_BRIDGE_DIR` set) register no global hot keys, don't start
+  Telegram and don't touch real configs (`Integrations.isSideInstance`).
 - The self-test starts real HTTP servers on spare ports (27700–27759 end to end, 27760–27799 server limits) and runs real `git commit`s in a temp repo.

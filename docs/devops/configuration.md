@@ -1,7 +1,7 @@
 ---
 audience: devops
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Configuration
@@ -31,6 +31,8 @@ updated: 2026-11-10
 | `terminalApp` | `Terminal` | `Terminal` or `iTerm` for launched tasks |
 | `worktreeRoot` | `~/.agentboard/worktrees` | Where task worktrees are created |
 | `notifyCommits` / `notifyWaiting` / `notifyConflicts` | true | Notifications |
+| `globalHotkeys` | true | ⌥⌘J (next agent that needs you) / ⌥⌘K (*Needs you* panel) from any app |
+| `ignoredProjectSuggestions` | [] | Folders not to suggest again |
 
 ## Environment variables
 
@@ -40,13 +42,14 @@ updated: 2026-11-10
 | `AGENTBOARD_BRIDGE_DIR` | Folder for the bridge script and its `port` file (default `~/.agentboard`); the bridge always uses the port file next to itself |
 | `AGENTBOARD_WORKTREE_ROOT` | Overrides `worktreeRoot` |
 | `CLAUDE_CONFIG_DIR` | Claude Code folder (default `~/.claude`): sessions, transcripts **and** the `settings.json` the installers edit |
+| `GEMINI_CLI_HOME` | Gemini CLI home (its `.gemini/settings.json` is what the installer edits; default `~`) |
 | `CODEX_HOME` | Codex folder (default `~/.codex`): logs **and** the `config.toml` / `hooks.json` the installers edit |
 | `AGENTBOARD_SNAPSHOT`, `AGENTBOARD_SNAPSHOT_DELAY` | Debug: save a PNG of the main window after N seconds |
 | `AGENTBOARD_INTERNAL` | Set for the app's child processes; makes the bridge a no-op |
 
 ## Command-line flags
 
-`-port N` · `--install-claude` · `--install-codex` · `--uninstall-claude` · `--self-test`
+`-port N` · `--install-claude` · `--install-codex` · `--install-gemini` · `--uninstall-claude` · `--uninstall-gemini` · `--discover` · `--self-test`
 
 ## Files
 
@@ -56,6 +59,7 @@ updated: 2026-11-10
 | `~/.agentboard/` | Owner-only folder (0700) |
 | `~/.agentboard/bin/agentboard-hook`, `~/.agentboard/port` | Bridge |
 | `~/.agentboard/token`, `~/.agentboard/auth-header` | The install's API token and the curl header line (0600) — see [ADR-007](../architecture/decisions/007-per-install-token.md) |
+| `~/.agentboard/telegram.json` | Telegram bot token, paired chat, "only when away" (0600; only after pairing) |
 | `~/.agentboard/prompts/task-N.txt` | Prompt of a task being launched (0600, deleted once the agent has read it) |
 | `~/.agentboard/worktrees/` | Task worktrees |
 | `~/Documents/AgentBoard/YYYY-MM-DD.md` | Exported summaries |

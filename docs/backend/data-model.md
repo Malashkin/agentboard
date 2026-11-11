@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Data model
@@ -20,6 +20,7 @@ erDiagram
   AGENTS ||--o{ SUBAGENTS : runs
   AGENTS ||--o{ FILE_TOUCHES : touches
   AGENTS ||--o{ MESSAGES : receives
+  PROJECTS ||--o{ MEMORY : remembers
   AGENTS }o--o| TASKS : "assignee"
 ```
 
@@ -28,12 +29,13 @@ erDiagram
 | `projects` | id, name, path, common_dir, client, aliases, archived_at | `aliases`: former paths (moved folders); `archived_at`: removed with *keep history* — hidden everywhere, restored (same id) when the same folder is added again |
 | `agents` | id, project_id, tool, session_id, name, cwd, root, branch, status, last_prompt, focus, last_action, tty, stuck, narrative, pinned, started_at, last_seen, ended_at | status: working/waiting/idle/ended |
 | `tasks` | id, project_id, title, details, client, status, assignee, created_by, worktree, branch, base_branch | created_by: `user`, agent id, or `auto` |
-| `events` | id, project_id, agent_id, kind, title, detail, client, ref, created_at, sub, task_id | kinds below |
+| `events` | id, project_id, agent_id, kind, title, detail, client, ref, created_at, sub, task_id | kinds below; an edit `action` carries its diff in `detail` (`Core.editDiff`, bounded) for the replay |
 | `reservations` | project_id, agent_id, pattern, exclusive, reason, expires_at, released_at | patterns are repo-relative |
 | `subagents` | id (Claude agent_id), agent_id, type, description, status, result | |
 | `messages` | to_agent, from_agent, from_label, text, delivered_at | the agents' inbox |
 | `file_touches` | agent_id, path, count, last_at | for conflict warnings and hot files |
 | `summaries` | day, markdown, source | |
+| `memory` | project_id, text, author (agent name, "" = human), author_agent, created_at, removed_at | project memory; newest 40 shown, given to every new session |
 | `imported_sessions` | tool, session_id, project_id, last_at | history import bookkeeping |
 | `codex_offsets` | path, offset | Codex log follower position |
 

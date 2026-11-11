@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Background services
@@ -9,7 +9,9 @@ updated: 2026-11-10
 | Service | Interval / trigger | What it does |
 |---|---|---|
 | `CodexWatcher` | every 2 s | Tails `~/.codex/sessions/**/rollout-*.jsonl` (today/yesterday) for sessions that don't report via hooks |
-| `SessionLiveness` | every 5 s | Reads `~/.claude/sessions/*.json`, checks pid + start time; refreshes open sessions, ends sessions whose process disappeared, fixes missed `Stop` |
+| `SessionLiveness` | every 5 s | Reads `~/.claude/sessions/*.json`, checks pid + start time; refreshes open sessions, ends sessions whose process disappeared, fixes missed `Stop`; gives a card to open interactive sessions in a project that no hook reported yet (`Core.adoptLiveSession`) |
+| `HotKeys` | system-wide ⌥⌘J / ⌥⌘K (Carbon `RegisterEventHotKey`) | Jump to the next agent that needs you (`Attention.queue`) / open the *Needs you* panel. Not registered in a side instance |
+| `Telegram` | long polling `getUpdates` (25 s) while a bot is configured | Sends requests and "waiting" messages to the paired chat (only while away from the Mac by default) and turns buttons/replies into decisions or session messages (`TelegramLink.parse`) |
 | `GitMonitor` | every 15 s (every 60 s while the window is hidden) | Worktrees, status and today's commits per project |
 | UI ticker | every 15 s, only while the window is visible | Refreshes relative times ("5 min ago") |
 | `Narrator` | tick every 20 s | For agents with new events: plain-language line, at most every `narratorMinutes` (status changes immediately) |

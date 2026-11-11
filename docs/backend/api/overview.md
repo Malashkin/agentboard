@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Local API overview
@@ -13,6 +13,7 @@ updated: 2026-11-10
 | GET | `/health` | anyone (no token) | `{"ok":true,"app":"AgentBoard","version":…}` |
 | POST | `/hook/claude[?tty=ttysNNN][&tool=codex]` | Claude Code and Codex hooks via the bridge | [hooks.md](hooks.md) |
 | POST | `/hook/codex` | Codex `notify` | [hooks.md](hooks.md) |
+| POST | `/hook/gemini[?tty=ttysNNN]` | Gemini CLI hooks via the bridge (translated) | [hooks.md](hooks.md) |
 | POST | `/hook/git` | git post-commit | [hooks.md](hooks.md) |
 | POST | `/hook/git-precommit` | git pre-commit | [hooks.md](hooks.md) |
 | POST | `/mcp` | MCP clients (JSON-RPC 2.0, JSON responses; GET → 405, DELETE → 200) | [mcp.md](mcp.md) |
