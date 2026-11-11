@@ -1,7 +1,7 @@
 ---
 audience: product
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Features
@@ -9,10 +9,12 @@ updated: 2026-11-10
 ## Visibility
 - **Agent cards** — one per Claude Code / Codex session, with a unique superhero name (100 built in),
   status (working · waiting for you · idle · stuck · finished · inactive), project, branch, current task,
+  touched files, last action and a quick reply field.
   *"Waiting for you" means the agent cannot continue without an answer — a permission, a question,
   a plan. An agent that merely finished its turn and sits at its prompt is **idle**, even though
   Claude Code announces that as "waiting for your input".*
-  touched files, last action and a quick reply field.
+- **Order of the cards** — agents that are working (including ones flagged as looping) come first;
+  the rest keep a stable order by session start, so a card moves only when its status really changes.
 - **Plain-language status** — a small model (Haiku via `claude -p`) writes one or two sentences about
   what the agent is doing, refreshed only after new activity (default: at most every 2 minutes per agent).
 - **Feed** — prompts, commands, edits, reads, searches, subagents, MCP calls, failures, answers, commits.

@@ -122,8 +122,8 @@ struct AgentsGrid: View {
     var list: [Agent] {
         let all = projectId.map { store.agents(in: $0) } ?? store.agents
         let filtered = showEnded ? all : all.filter { $0.isActive(staleMinutes: store.staleMinutes, at: store.now) }
-        // Stable order (by session start): cards must not jump around while agents work.
-        return filtered.sorted { ($0.startedAt, $0.id) < ($1.startedAt, $1.id) }
+        // Working agents on top, then a stable order by session start.
+        return filtered.sorted { Agent.boardPrecedes($0, $1, staleMinutes: store.staleMinutes, at: store.now) }
     }
 
     var body: some View {

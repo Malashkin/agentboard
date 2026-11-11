@@ -196,6 +196,40 @@ extension SelfTest {
               "a result without an error is a success")
         check(!Herdr.succeeded(json: "", exitCode: 1), "no output at all → judged by the exit status")
 
+        section("Board order: the working agent is on top", layer: "unit")
+        let orderNow = Date(timeIntervalSince1970: 10_000)
+        func boardAgent(_ id: String, _ status: String, started: Double, stuck: String = "", seen: Double = 10_000) -> Agent {
+            var a = Agent(["id": id, "status": status, "started_at": started, "last_seen": seen] as Row)
+            a.stuck = stuck
+            return a
+        }
+        func order(_ agents: [Agent]) -> [String] {
+            agents.sorted { Agent.boardPrecedes($0, $1, staleMinutes: 30, at: orderNow) }.map(\.id)
+        }
+        // Started last, but it is the one running: the human looks for it first.
+        check(order([boardAgent("idle-old", "idle", started: 1),
+                     boardAgent("waiting", "waiting", started: 2),
+                     boardAgent("working", "working", started: 9)]) == ["working", "idle-old", "waiting"],
+              "a working agent is first even though its session started last")
+        check(order([boardAgent("b", "working", started: 5), boardAgent("a", "working", started: 2)]) == ["a", "b"],
+              "two working agents keep the stable order by session start")
+        check(order([boardAgent("z", "idle", started: 5), boardAgent("y", "waiting", started: 2)]) == ["y", "z"],
+              "without a working agent nothing changes: the old order by session start remains")
+        // `stuck` is a working agent the loop detector flagged. It must not fall to the bottom:
+        // it is running, and it is the card that needs a human most.
+        check(order([boardAgent("idle", "idle", started: 1),
+                     boardAgent("looping", "working", started: 8, stuck: "the same command 5 times")]) == ["looping", "idle"],
+              "an agent stuck in a loop stays on top — it is still running")
+        // An agent whose last_seen is old reads as inactive whatever the row says, so a stale
+        // "working" row must not hold the top spot.
+        check(order([boardAgent("live", "working", started: 7),
+                     boardAgent("gone", "working", started: 1, seen: 1_000)]) == ["live", "gone"],
+              "a stale row that still says working does not outrank an agent that is really running")
+        check(AgentStatus.working.sortRank == AgentStatus.stuck.sortRank
+                && AgentStatus.waiting.sortRank == AgentStatus.idle.sortRank
+                && AgentStatus.working.sortRank < AgentStatus.idle.sortRank,
+              "only running / not running decides the group; everything else is ordered by start time")
+
         section("Security helpers: token, names, peer text, links (H2, M2, L2)", layer: "unit")
         let tok = Auth.newToken()
         check(Auth.isWellFormed(tok) && tok != Auth.newToken(), "tokens are 32 random bytes in hex, different each time")

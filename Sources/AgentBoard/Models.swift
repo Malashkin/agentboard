@@ -71,6 +71,14 @@ enum AgentStatus: String {
         case .stuck: return "arrow.triangle.2.circlepath"
         }
     }
+    /// Where the status sends the card on the board. A running agent goes first: it is the one
+    /// whose state is changing, and the one the human usually opened the board to look at.
+    var sortRank: Int {
+        switch self {
+        case .working, .stuck: return 0
+        case .waiting, .idle, .stale, .ended: return 1
+        }
+    }
 }
 
 struct Agent: Identifiable, Hashable {
@@ -125,6 +133,16 @@ struct Agent: Identifiable, Hashable {
     func isActive(staleMinutes: Double, at date: Date = Date()) -> Bool {
         let s = displayStatus(staleMinutes: staleMinutes, at: date)
         return s != .ended && s != .stale
+    }
+
+    /// Order of the cards on the board: working agents first, then everyone else by session start.
+    /// Inside a group the order never changes, so a card moves only when its status really flips —
+    /// cards must not shuffle under the cursor while the agents work.
+    static func boardPrecedes(_ a: Agent, _ b: Agent, staleMinutes: Double, at date: Date = Date()) -> Bool {
+        let ra = a.displayStatus(staleMinutes: staleMinutes, at: date).sortRank
+        let rb = b.displayStatus(staleMinutes: staleMinutes, at: date).sortRank
+        if ra != rb { return ra < rb }
+        return (a.startedAt, a.id) < (b.startedAt, b.id)
     }
 }
 
