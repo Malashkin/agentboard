@@ -43,6 +43,7 @@ enum Pref {
     static let narratorMinutes = "narratorMinutes"
     static let narratorModel = "narratorModel"
     static let scriptingAPI = "scriptingAPI"
+    static let globalHotkeys = "globalHotkeys"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -75,6 +76,7 @@ enum Pref {
             narratorMinutes: 2.0,
             narratorModel: "haiku",
             scriptingAPI: false,
+            globalHotkeys: true,
         ])
     }
 }
@@ -110,6 +112,8 @@ enum AppSettings {
     static var narratorModel: String { (d.string(forKey: Pref.narratorModel) ?? "").trimmed.isEmpty ? "haiku" : d.string(forKey: Pref.narratorModel)!.trimmed }
     /// /api/decide, /api/tasks, /api/tasks/launch (still need the token).
     static var scriptingAPI: Bool { d.bool(forKey: Pref.scriptingAPI) }
+    /// ⌥⌘J / ⌥⌘K from any app.
+    static var globalHotkeys: Bool { d.bool(forKey: Pref.globalHotkeys) }
     static var worktreeRoot: String {
         if let e = ProcessInfo.processInfo.environment["AGENTBOARD_WORKTREE_ROOT"], !e.isEmpty { return e }
         let v = d.string(forKey: Pref.worktreeRoot) ?? ""

@@ -97,6 +97,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Integrations.writeBridge()
         startServer()
         AppVisibility.start()
+        // Not in a side instance: it would take the shortcuts from the real app.
+        if !Integrations.isSideInstance { HotKeys.apply() }
 
         GitMonitor.shared.onUpdate = { snap in if store.git != snap { ThemeStore.animate { store.git = snap } } }
         GitMonitor.shared.start()

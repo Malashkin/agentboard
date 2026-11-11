@@ -63,6 +63,29 @@ enum Herdr {
         return succeeded(json: r.out, exitCode: r.code)
     }
 
+    /// Makes the pane the visible one in herdr.
+    static func focus(pane: String) -> Bool {
+        guard let bin = binary, !pane.isEmpty else { return false }
+        let r = Shell.run(bin, ["agent", "focus", pane], timeout: 10)
+        return succeeded(json: r.out, exitCode: r.code)
+    }
+
+    /// The terminal the herdr client is attached in (so its window can be raised), if one is.
+    static func clientTTY() -> String? {
+        let ps = Shell.run("/bin/ps", ["-axo", "tty=,comm="], timeout: 5).out
+        return clientTTY(psOutput: ps)
+    }
+
+    static func clientTTY(psOutput: String) -> String? {
+        for l in psOutput.split(separator: "\n") {
+            let f = l.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard f.count == 2, f[0].hasPrefix("ttys"),
+                  URL(fileURLWithPath: f[1].trimmingCharacters(in: .whitespaces)).lastPathComponent == "herdr" else { continue }
+            return "/dev/" + f[0]
+        }
+        return nil
+    }
+
     /// Whether a herdr command worked.
     ///
     /// Its CLI reports failures as `{"error":{…}}` and still exits 0, so the exit status alone
@@ -74,5 +97,11 @@ enum Herdr {
     }
 
     /// Herdr tracks an agent in that pane, so a prompt will reach it rather than a bare shell.
-    static func canPrompt(_ p: Pane) -> Bool { p.status != "unknown" }
+    /// `auto`: the app decided to type on its own (Auto mode) because it believes the agent is at its
+    /// prompt. Herdr sees the terminal itself, so when it says the agent is busy that wins — typing
+    /// mid-turn would interrupt the work; the message goes to the inbox instead.
+    static func canPrompt(_ p: Pane, auto: Bool = false) -> Bool {
+        if p.status == "unknown" { return false }
+        return !auto || ["idle", "blocked", "done"].contains(p.status)
+    }
 }

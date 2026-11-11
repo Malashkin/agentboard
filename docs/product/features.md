@@ -31,6 +31,10 @@ updated: 2026-11-11
   Also in the menu bar and as macOS notifications with action buttons. The terminal prompt stays live.
 - **Reply** on an idle/waiting agent's card or from its notification — typed into its terminal
   (herdr, tmux, iTerm2, Terminal.app); queued into context for a busy agent; background resume for closed sessions.
+- **Jump to the terminal** — a button on each card brings that agent's own tab (Terminal.app, iTerm2,
+  tmux, herdr) to the front.
+- **⌥⌘J / ⌥⌘K from any app** — jump to the next agent that needs you; open the *Needs you* panel to answer
+  requests and reply to waiting agents without switching windows.
 - **While you were away** — a short digest after a break (default 20 minutes).
 
 ## Coordination

@@ -188,6 +188,13 @@ extension SelfTest {
         check(Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "idle"))
                 && Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "done")),
               "an idle or finished agent still accepts a prompt — that is the case worth waking")
+        check(!Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "working"), auto: true),
+              "Auto mode doesn't type into an agent herdr sees working — the board may be behind, herdr isn't")
+        check(Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "idle"), auto: true)
+                && Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "blocked"), auto: true),
+              "…but types into one herdr sees at its prompt or blocked")
+        check(Herdr.canPrompt(Herdr.Pane(id: "w1:p1", status: "working")),
+              "an explicit \"type into the terminal\" from the human still goes through")
         // herdr reports refusals in JSON and still exits 0, so the exit status alone would read
         // every error as success.
         check(!Herdr.succeeded(json: #"{"error":{"code":"agent_not_found"}}"#, exitCode: 0),
@@ -229,6 +236,39 @@ extension SelfTest {
                 && AgentStatus.waiting.sortRank == AgentStatus.idle.sortRank
                 && AgentStatus.working.sortRank < AgentStatus.idle.sortRank,
               "only running / not running decides the group; everything else is ordered by start time")
+
+        section("Who needs you: the ⌥⌘J order", layer: "unit")
+        let people = [boardAgent("idle-new", "idle", started: 1, seen: 9_900),
+                      boardAgent("idle-old", "idle", started: 1, seen: 9_000),
+                      boardAgent("busy", "working", started: 1),
+                      boardAgent("waiting-long", "waiting", started: 1, seen: 9_100),
+                      boardAgent("waiting-short", "waiting", started: 1, seen: 9_800),
+                      boardAgent("loop", "working", started: 1, stuck: "same command 5×"),
+                      boardAgent("asks", "working", started: 1),
+                      boardAgent("done", "ended", started: 1)]
+        let byStatus: (Agent) -> AgentStatus = { $0.displayStatus(staleMinutes: 30, at: orderNow) }
+        let q = Attention.queue(people, status: byStatus, requested: ["asks"]).map(\.id)
+        check(q.first.map { ["asks", "waiting-long", "waiting-short"].contains($0) } == true
+                && q.firstIndex(of: "waiting-long")! < q.firstIndex(of: "waiting-short")!,
+              "requests and waiting agents first, the one waiting longest before the others", q.joined(separator: ","))
+        check(q.firstIndex(of: "loop")! > q.firstIndex(of: "waiting-short")! && q.firstIndex(of: "loop")! < q.firstIndex(of: "idle-new")!,
+              "then the agent stuck in a loop, then the idle ones", q.joined(separator: ","))
+        check(q.suffix(2) == ["idle-new", "idle-old"], "idle agents: the most recent first", q.joined(separator: ","))
+        check(!q.contains("busy") && !q.contains("done"), "an agent that is working or finished doesn't need you")
+        let walk = Attention.queue(people, status: byStatus, requested: [])
+        var seen: [String] = []
+        var cur: String?
+        for _ in 0..<(walk.count + 1) { cur = Attention.next(after: cur, in: walk)?.id; seen.append(cur ?? "") }
+        check(Set(seen.prefix(walk.count)).count == walk.count && seen.last == seen.first,
+              "pressing ⌥⌘J again walks every agent once, then starts over")
+        check(Attention.next(after: "gone-away", in: walk)?.id == walk.first?.id && Attention.next(after: nil, in: []) == nil,
+              "an agent that left the queue restarts from the top; an empty queue gives nothing")
+        check(TerminalFocus.terminalScript(tty: "/dev/ttys004").contains(#"tty of t is "/dev/ttys004""#)
+                && TerminalFocus.itermScript(tty: "/dev/ttys004").contains(#"tty of s is "/dev/ttys004""#),
+              "the terminal is found by the agent's own tty, not by window title")
+        check(Herdr.clientTTY(psOutput: "??       /Applications/Foo\nttys002  -zsh\nttys007  /Users/x/.local/bin/herdr\n") == "/dev/ttys007"
+                && Herdr.clientTTY(psOutput: "??  /Users/x/.local/bin/herdr\nttys001  herdr-helper\n") == nil,
+              "a herdr agent: the window to raise is the one the herdr client runs in (a server without a terminal doesn't count)")
 
         section("Security helpers: token, names, peer text, links (H2, M2, L2)", layer: "unit")
         let tok = Auth.newToken()
@@ -614,11 +654,16 @@ extension SelfTest {
 
         _ = hook(["hook_event_name": "Stop", "session_id": "mx", "cwd": repo, "last_assistant_message": "done"])
         check(core.q.sync { core.agent(id: mx.id)?.status } == "idle", "a finished turn leaves the agent idle")
+        var waitingAlerts: [String] = []
+        let savedNotify = core.notifyWaitingAgent
+        core.notifyWaitingAgent = { _, _, body in waitingAlerts.append(body) }
+        defer { core.notifyWaitingAgent = savedNotify }
         _ = hook(["hook_event_name": "Notification", "session_id": "mx", "cwd": repo,
                   "message": "Claude is waiting for your input"])
         check(core.q.sync { core.agent(id: mx.id)?.status } == "idle",
               "…and the nudge that follows it does not turn the agent into one waiting for a reply",
               core.q.sync { core.agent(id: mx.id)?.status } ?? "")
+        check(waitingAlerts.isEmpty, "…and no \"waiting for you\" notification pops up for it", waitingAlerts.joined())
         check(core.q.sync { !core.db.query("SELECT 1 FROM events WHERE agent_id=? AND kind='waiting'", [mx.id]).isEmpty },
               "the nudge is still recorded in the feed — Claude did say it")
         _ = hook(["hook_event_name": "Notification", "session_id": "mx", "cwd": repo,
@@ -626,6 +671,9 @@ extension SelfTest {
         check(core.q.sync { core.agent(id: mx.id)?.status } == "waiting",
               "a notification that is not the nudge still means the agent waits for you",
               core.q.sync { core.agent(id: mx.id)?.status } ?? "")
+        if AppSettings.notifyWaiting {
+            check(waitingAlerts.count == 1, "…and that one is announced", "\(waitingAlerts.count)")
+        }
 
         section("Delivering a human message into a session")
         _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "mx", "cwd": repo, "prompt": "Refactor the parser please"])

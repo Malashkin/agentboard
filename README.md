@@ -81,6 +81,9 @@ AgentBoard sits next to your agents and turns all of that into one live board.
 - **Reply to an idle agent** right on its card, or from the notification. The text is delivered
   like a message typed into its terminal (Terminal.app, iTerm2, tmux); a busy agent gets it in
   its context at the next step; a closed session can be resumed in the background.
+- **Jump straight to the agent.** A terminal button on every card brings that agent's own tab to the
+  front (Terminal.app, iTerm2, tmux, herdr). From any app, **⌥⌘J** takes you to the next agent that needs
+  you, and **⌥⌘K** opens a small *Needs you* panel to answer everything without leaving what you're doing.
 - **"While you were away".** Come back after a break and get a short digest: what was finished,
   what's waiting for you, who got stuck.
 
@@ -188,7 +191,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 344 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 357 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

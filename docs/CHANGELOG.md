@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Positioning: AgentBoard works on top of the agents you already run; comparison with agent platforms (Multica, Paperclip) in the README and `docs/product/positioning.md`.
 
 ### Added
+- **Jump to the agent's terminal.** A terminal button on every card (and in the answer panel) brings that
+  agent's own Terminal.app / iTerm2 tab to the front — through tmux (pane selected, client window raised)
+  and herdr (`herdr agent focus`, then the window herdr runs in).
+- **Shortcuts from any app** (Carbon hot keys, no Accessibility permission): **⌥⌘J** jumps to the next
+  agent that needs you — open request or waiting first (longest wait first), then stuck, then idle — and
+  each press walks on to the next; **⌥⌘K** opens a floating *Needs you* panel with every request and every
+  waiting agent, a reply field and a terminal button. Settings → General can turn them off.
+
+### Fixed
+- The "Claude is waiting for your input" nudge after a turn no longer pops a macOS *waiting for you*
+  notification (the card already showed the agent as idle).
+- Auto mode no longer types into an agent that herdr sees as **working** while the board still thought it
+  idle: the message goes to the inbox instead. An explicit "type into the terminal" still goes through.
+
+### Added (herdr)
 - **Terminal delivery through [herdr](https://herdr.dev).** Herdr starts every agent in a
   pseudo-terminal it creates itself, so no Terminal.app tab, iTerm2 session or tmux pane owns that
   terminal — and only the process holding the pty master can put text into the agent's input.
@@ -63,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 344 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 357 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

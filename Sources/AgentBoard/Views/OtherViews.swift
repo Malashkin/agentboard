@@ -217,6 +217,7 @@ struct SettingsView: View {
     @AppStorage(Pref.narratorMinutes) private var narratorMinutes = 2.0
     @AppStorage(Pref.narratorModel) private var narratorModel = "haiku"
     @AppStorage(Pref.scriptingAPI) private var scriptingAPI = false
+    @AppStorage(Pref.globalHotkeys) private var globalHotkeys = true
 
     var body: some View {
         TabView {
@@ -225,6 +226,8 @@ struct SettingsView: View {
 
             Form {
                 Toggle("Launch at login", isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
+                Toggle("Shortcuts from any app: ⌥⌘J next agent that needs you · ⌥⌘K answer panel", isOn: $globalHotkeys)
+                    .onChange(of: globalHotkeys) { HotKeys.apply() }
                 Stepper("Mark agent idle after \(Int(staleMinutes)) min of silence", value: $staleMinutes, in: 5...240, step: 5)
                 TextField("Local server port", value: $port, format: .number.grouping(.never))
                 Text("After changing the port, restart the app and reconnect MCP in Integrations.")

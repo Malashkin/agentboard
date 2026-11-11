@@ -85,14 +85,18 @@ struct AgentCard: View {
                             .disabled(reply.trimmed.isEmpty)
                             .help("Delivered like a message typed in its terminal")
                     }
-                    if let replyResult { Text(replyResult).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
                 }
+                if let replyResult { Text(replyResult).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
                 Divider()
                 HStack(spacing: 6) {
                     Image(systemName: "bolt").foregroundStyle(.secondary)
                     Text(agent.lastAction.isEmpty ? "—" : agent.lastAction).lineLimit(1).truncationMode(.tail)
                     Spacer()
                     Text(Fmt.rel(agent.lastSeen, now: store.now)).foregroundStyle(.secondary)
+                    if st != .ended {
+                        Button { store.focusTerminal(agent) { replyResult = $0 } } label: { Image(systemName: "terminal") }
+                            .buttonStyle(.borderless).help("Bring its terminal to the front")
+                    }
                     Button { onMessage() } label: { Image(systemName: "text.bubble") }
                         .buttonStyle(.borderless).help("Message the agent's session")
                 }

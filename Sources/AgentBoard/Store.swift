@@ -284,6 +284,37 @@ final class Store: ObservableObject {
     func dropReservation(_ id: Int64) { core { $0.dropReservation(id: id) } }
     func pinAgent(_ id: String, to project: String) { core { $0.pinAgent(id, to: project) } }
 
+    // MARK: Getting to an agent
+
+    /// Agents that need the human, in the order to visit them (see `Attention.queue`).
+    var attentionQueue: [Agent] {
+        Attention.queue(agents, status: status, requested: Set(pending.map(\.agentId)))
+    }
+
+    /// Brings the agent's terminal to the front (off the main thread); `done` gets a short result.
+    func focusTerminal(_ a: Agent, done: @escaping (String) -> Void = { _ in }) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let r = TerminalFocus.focus(a)
+            DispatchQueue.main.async {
+                switch r {
+                case .success(let how): done("Opened \(a.name)'s terminal (\(how)).")
+                case .failure(let e): done(e.message)
+                }
+            }
+        }
+    }
+
+    private var lastJumped: String?
+
+    /// ⌥⌘J: the next agent that needs you, terminal to the front; nobody waiting → the answer panel says so.
+    func jumpToNextAgent() {
+        guard let a = Attention.next(after: lastJumped, in: attentionQueue) else { QuickPanel.shared.show(); return }
+        lastJumped = a.id
+        focusTerminal(a) { msg in
+            if !msg.hasPrefix("Opened") { Notifier.shared.post(a.name, msg) }
+        }
+    }
+
     /// Runs git/terminal work off the main thread; completion on main with an error text or nil.
     func workspace(_ work: @escaping () throws -> String?, done: @escaping (String?, String?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {

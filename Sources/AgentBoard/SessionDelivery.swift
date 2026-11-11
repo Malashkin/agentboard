@@ -64,7 +64,7 @@ enum SessionDelivery {
             return resume(a, text)
         case .auto:
             if st == .working { return toInbox() }
-            if st == .waiting || st == .idle || st == .stale, let how = typeIntoTerminal(a, text) {
+            if st == .waiting || st == .idle || st == .stale, let how = typeIntoTerminal(a, text, auto: true) {
                 log(how)
                 return "\(a.name) was waiting for input — the comment was typed into its terminal (\(how)), and it is continuing."
             }
@@ -75,20 +75,20 @@ enum SessionDelivery {
     // MARK: Terminal
 
     /// Returns a description of where the text was typed, or nil.
-    static func typeIntoTerminal(_ a: Agent, _ text: String) -> String? {
+    /// `auto`: chosen by Auto mode rather than by the human — then a terminal that is busy is left alone.
+    static func typeIntoTerminal(_ a: Agent, _ text: String, auto: Bool = false) -> String? {
         let line = (prefix + text).oneLine
 
         // Herdr is asked first: when it manages the session, the agent's terminal is a pty herdr
         // owns, no tab or pane below will ever match it, and only herdr can reach the input.
         // Costs nothing to the majority who don't use it — without the binary this returns at once.
-        if let pane = Herdr.pane(sessionId: a.sessionId, tool: a.tool), Herdr.canPrompt(pane),
-           Herdr.prompt(pane: pane.id, text: line) {
-            return "herdr \(pane.id)"
+        if let pane = Herdr.pane(sessionId: a.sessionId, tool: a.tool) {
+            if Herdr.canPrompt(pane, auto: auto), Herdr.prompt(pane: pane.id, text: line) { return "herdr \(pane.id)" }
+            // Herdr owns this terminal: no tab or pane below can match it, and if it says "busy", it is.
+            if pane.status != "unknown" { return nil }
         }
 
-        var tty = a.tty
-        if tty.isEmpty || a.tool == "codex" { tty = findTTY(tool: a.tool, cwd: a.cwd) ?? tty }
-        guard tty.hasPrefix("/dev/"), Core.isTTYName(String(tty.dropFirst(5))) else { return nil }
+        guard let tty = terminalTTY(a) else { return nil }
         // Typed text ends with Enter: if the agent has exited and the tab is back at a shell prompt, the shell
         // would run it as a command. Only type when the agent itself is the foreground process of that terminal.
         let ps = Shell.run("/bin/ps", ["-t", String(tty.dropFirst(5)), "-o", "stat=,comm="], timeout: 5)
@@ -141,15 +141,23 @@ enum SessionDelivery {
         return nil
     }
 
-    private static func isRunning(_ bundleId: String) -> Bool {
+    /// The agent's terminal device (`/dev/ttysNNN`), from its hooks or by looking up its process.
+    static func terminalTTY(_ a: Agent) -> String? {
+        var tty = a.tty
+        if tty.isEmpty || a.tool == "codex" { tty = findTTY(tool: a.tool, cwd: a.cwd) ?? tty }
+        guard tty.hasPrefix("/dev/"), Core.isTTYName(String(tty.dropFirst(5))) else { return nil }
+        return tty
+    }
+
+    static func isRunning(_ bundleId: String) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).isEmpty
     }
 
-    private static func osa(_ script: String) -> String {
+    static func osa(_ script: String) -> String {
         Shell.run("/usr/bin/osascript", ["-e", script], timeout: 15).line
     }
 
-    private static func tmuxPane(tty: String) -> String? {
+    static func tmuxPane(tty: String) -> String? {
         guard let tmux = Shell.which("tmux") else { return nil }
         let r = Shell.run(tmux, ["list-panes", "-a", "-F", "#{pane_tty} #{pane_id}"], timeout: 5)
         guard r.ok else { return nil }

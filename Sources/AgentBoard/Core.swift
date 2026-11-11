@@ -1036,8 +1036,8 @@ final class Core {
             let nudge = !blocked && Self.isIdleNudge(msg)
             setAgent(agent.id, ["status": nudge ? "idle" : "waiting", "last_action": msg.trunc(200)])
             addEvent(project: project.id, agent: agent.id, kind: "waiting", title: "\(agent.name): \(msg.trunc(200))")
-            // A request already shown in the app was announced there.
-            if AppSettings.notifyWaiting && !pending.values.contains(where: { $0.commit.agentId == agent.id }) {
+            // A request already shown in the app was announced there; the idle nudge asks nothing.
+            if AppSettings.notifyWaiting && !blocked && !nudge {
                 notifyWaitingAgent?(agent, "\(agent.name) · \(project.name)", msg)
             }
             reply(nil)
