@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Changelog
@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sessions are matched to herdr panes **by session id**, which herdr reports as the agent's own
   (`agent_session.value`). Exact where a working-directory lookup cannot be: eight sessions open on
   one repository stay distinguishable.
+
+### Changed
+- **Working agents are first on the board.** The grid used to be ordered by session start only, so the
+  one agent actually running could sit below three that had finished. Running agents (including those
+  flagged as stuck in a loop) now come first; inside each group the old stable order by session start is
+  kept, so a card moves only when its status really flips and nothing shuffles under the cursor.
 
 ### Fixed
 - **The board asked for answers nobody had asked for.** Claude Code sends the `Notification` hook
