@@ -15,7 +15,7 @@ The project builds without Xcode, so there is no XCTest. Verification has three 
    `/mcp`, `/api/*` — for flows that need time (liveness) or the UI.
 3. **Window snapshots** (`AGENTBOARD_SNAPSHOT`) to check layout and rendering without screen-recording permission.
 
-## Layers (392 checks)
+## Layers (399 checks)
 
 | Layer | Checks | What it pins down |
 |---|---|---|

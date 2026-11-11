@@ -72,10 +72,11 @@ struct ProjectView: View {
                         Text("Tasks").tag(2)
                         Text("Feed").tag(3)
                         Text("Git").tag(4)
+                        Text("Memory").tag(6)
                         Text("Settings").tag(5)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 500)
+                    .frame(width: 580)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 14)
                 Divider()
@@ -86,6 +87,7 @@ struct ProjectView: View {
                     case 2: BoardView(projectId: p.id)
                     case 3: ScrollView { FeedList(projectId: p.id, limit: 500, showComposer: true).padding(20) }
                     case 4: GitView(projectId: p.id)
+                    case 6: MemoryView(project: p)
                     default: ProjectSettingsView(project: p)
                     }
                 }
@@ -250,6 +252,56 @@ struct GitView: View {
 }
 
 // MARK: - Project settings
+
+/// Project memory: lasting facts every new session gets at its start (see ProjectMemory.swift).
+struct MemoryView: View {
+    @EnvironmentObject var store: Store
+    let project: Project
+    @State private var draft = ""
+
+    var body: some View {
+        let items = store.memory(of: project.id)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("What every new agent session in \(project.name) is told at its start. Agents add facts with remember(); you can add, and remove anything that's wrong.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    TextField("A fact every session should know — e.g. “Run tests with ./scripts/test.sh, never npm test”", text: $draft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(add)
+                    Button("Add", action: add).disabled(draft.trimmed.isEmpty)
+                }
+                if items.isEmpty {
+                    Text("Nothing yet. Agents save what they learn here, so the next session doesn't have to find it out again.")
+                        .foregroundStyle(.secondary).padding(.vertical, 20)
+                }
+                ForEach(items) { m in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: m.byHuman ? "person.fill" : "sparkle").foregroundStyle(.secondary).frame(width: 16)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(m.text).textSelection(.enabled)
+                            Text("#\(m.id) · " + (m.byHuman ? "you" : m.author) + " · " + Fmt.rel(m.createdAt, now: store.now))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { store.forget(m) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless).help("Remove from project memory")
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    func add() {
+        let t = draft.trimmed
+        guard !t.isEmpty else { return }
+        draft = ""
+        store.remember(project: project.id, text: t)
+    }
+}
 
 struct ProjectSettingsView: View {
     @EnvironmentObject var store: Store

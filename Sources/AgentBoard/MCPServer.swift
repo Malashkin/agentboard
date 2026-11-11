@@ -14,6 +14,7 @@ extension Core {
     • reserve_files(paths, minutes, reason) / release_files(paths) — reserve files before editing them: \
     other agents can't edit or commit them while the reservation is active.
     • who_touches(path) — who recently changed a file and who has reserved it.
+    • remember(text) / forget(id) — project memory: lasting facts every future session gets at its start.
     Claude Code is detected automatically. Other clients (Codex etc.) first call register_agent(cwd) \
     and pass the returned agent_id in every call.
     """
@@ -59,6 +60,11 @@ extension Core {
                  ["to": prop("string", "Agent name, its agent_id, or \"all\""), "text": prop("string", "Message text")], ["to", "text"]),
             tool("post_note", "A note in the project feed for the human and other agents (decision, warning, outcome).",
                  ["text": prop("string", "Note text"), "client": prop("string", "Client, if the note is about one")], ["text"]),
+            tool("remember", "Save a lasting fact about this project that every future agent session should know at its start: how to build or test, a module not to touch, a gotcha. One short fact per call; not for progress updates (use update_task / post_note).",
+                 ["text": prop("string", "The fact, in one or two sentences")], ["text"]),
+            tool("forget", "Remove a fact from project memory that is wrong or outdated (its #id is shown at session start and by list_memory).",
+                 ["id": prop("integer", "Memory item number")], ["id"]),
+            tool("list_memory", "The project's memory: lasting facts earlier sessions saved.", [:], readOnly: true),
             tool("who_touches", "Which agents recently changed a file and whether it is reserved.", ["path": prop("string", "File path")], ["path"], readOnly: true),
             tool("reserve_files", "Reserve files, folders or globs (src/auth/, *.sql, src/**/*.ts) before editing. While the reservation is active, other agents can't edit or commit them. Calling again extends the reservation.",
                  ["paths": ["type": "array", "items": ["type": "string"], "description": "Paths relative to the repository root, folders or globs"],
@@ -275,6 +281,19 @@ extension Core {
             let hint = st == .working ? "it will get it on its next action"
                 : "currently \(st.label); it will get it when the human writes to it again or it calls agentboard"
             return done("Message for \(target.name) queued — \(hint).")
+
+        case "remember":
+            guard let text = args.str("text"), !text.trimmed.isEmpty else { return done("text is required", true) }
+            guard let m = remember(project: project.id, text: text, by: me) else { return done("Already in project memory.") }
+            return done("Saved to project memory as #\(m.id). Every new session in \(project.name) will see it at its start.")
+
+        case "forget":
+            guard let id = args.oi("id") else { return done("id is required", true) }
+            return forget(memory: id, project: project.id) ? done("Removed #\(id) from project memory.") : done("No memory item #\(id) in this project.", true)
+
+        case "list_memory":
+            let text = memoryText(project: project.id)
+            return done(text.isEmpty ? "Project memory is empty." : text)
 
         case "post_note":
             guard let text = args.str("text") else { return done("text is required", true) }

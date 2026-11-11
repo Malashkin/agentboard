@@ -40,6 +40,8 @@ updated: 2026-11-11
 - **While you were away** — a short digest after a break (default 20 minutes).
 
 ## Coordination
+- **Project memory** — facts agents (`remember`) or you save, given to every new session at its start; a
+  *Memory* tab per project to review them.
 - Agents get a digest of their neighbours at session start and on new requests.
 - MCP server `agentboard`: look at another agent's activity, message agents, post notes, manage tasks.
 - **File reservations** with expiry; edits of someone else's reservation are denied; a git pre-commit

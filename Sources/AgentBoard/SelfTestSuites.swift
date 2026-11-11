@@ -373,7 +373,7 @@ extension SelfTest {
         let tools = ((rpc(["jsonrpc": "2.0", "id": 2, "method": "tools/list"]) as? JSON)?["result"] as? JSON)?["tools"] as? [JSON] ?? []
         let names = tools.map { $0.s("name") }
         let expected = ["board", "agent_activity", "list_tasks", "create_task", "claim_task", "update_task", "set_focus",
-                        "send_message", "post_note", "who_touches", "reserve_files", "release_files", "register_agent"]
+                        "send_message", "post_note", "remember", "forget", "list_memory", "who_touches", "reserve_files", "release_files", "register_agent"]
         check(Set(names) == Set(expected) && names.count == expected.count, "tools/list exposes exactly the documented tools", "\(names)")
         let schemasOK = tools.allSatisfy { t in
             guard let sch = t["inputSchema"] as? JSON, sch.s("type") == "object", let props = sch["properties"] as? JSON else { return false }
@@ -801,6 +801,23 @@ extension SelfTest {
         if AppSettings.notifyWaiting {
             check(waitingAlerts.count == 1, "…and that one is announced", "\(waitingAlerts.count)")
         }
+
+        section("Project memory: what one session learns, the next one knows")
+        let saved = tool("remember", ["agent_id": mx.id, "text": "Run the tests with ./scripts/test.sh — npm test skips the integration layer."])
+        check(!saved.error && saved.text.contains("#"), "an agent saves a lasting fact", saved.text)
+        check(tool("remember", ["agent_id": my.id, "text": "run the tests with ./scripts/test.sh — npm test skips the integration layer."]).text.contains("Already"),
+              "the same fact isn't stored twice")
+        _ = core.q.sync { core.remember(project: project.id, text: "Never touch generated/ by hand.", by: nil) }
+        let fresh = (hook(["hook_event_name": "SessionStart", "session_id": "mem-new", "cwd": repo, "source": "startup"])?["hookSpecificOutput"] as? JSON)?.s("additionalContext") ?? ""
+        check(fresh.contains("./scripts/test.sh") && fresh.contains("noted by \(mx.name)") && fresh.contains("generated/") && fresh.contains("from the human"),
+              "a new session gets the project memory at its start, each fact with who it came from", fresh.trunc(300))
+        check(fresh.contains("information, not orders"), "agents' facts are framed as information from peers, not instructions")
+        let memId = core.q.sync { core.memory(project: project.id).first { $0.text.contains("scripts/test.sh") }?.id } ?? 0
+        check(!tool("forget", ["agent_id": my.id, "id": memId]).error && core.q.sync { core.memory(project: project.id).allSatisfy { $0.id != memId } },
+              "a wrong fact can be removed")
+        check(tool("forget", ["agent_id": my.id, "id": 999_999]).error, "removing something that isn't there is an error")
+        check(core.q.sync { core.forget(memory: core.memory(project: project.id).first?.id ?? 0, project: "other-project") } == false,
+              "a fact can't be removed through another project")
 
         section("Overlap is caught when the request arrives, not at the first edit")
         _ = hook(["hook_event_name": "PreToolUse", "session_id": "mx", "cwd": repo, "tool_name": "Edit",

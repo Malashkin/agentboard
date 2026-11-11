@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # MCP tools
@@ -34,6 +34,9 @@ Messages for an agent ride along in its context: the human's under "From the hum
 | `set_focus` | `focus`, `files?` | Declare current work; warns about overlaps |
 | `send_message` | `to` (name, id, `all`), `text` | Message delivered into the target's context |
 | `post_note` | `text`, `client?` | Note in the feed |
+| `remember` | `text` | Saves a lasting fact to project memory; every new session gets it at its start |
+| `forget` | `id` | Removes a fact from project memory (same project only) |
+| `list_memory` | — | The project's memory |
 | `who_touches` | `path` | Recent editors and reservation holder |
 | `reserve_files` | `paths[]`, `minutes?`, `exclusive?`, `reason?` | Lease files/folders/globs (renew by calling again) |
 | `release_files` | `paths[]?` | Release own leases (all if omitted) |

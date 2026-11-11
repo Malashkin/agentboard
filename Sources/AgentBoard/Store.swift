@@ -27,6 +27,7 @@ final class Store: ObservableObject {
     @Published var reservations: [Reservation] = []
     @Published var awayDigest: AwayDigest?
     @Published var subagents: [SubagentItem] = []
+    @Published var memory: [MemoryItem] = []
     @Published var importReport: [String: String] = [:]
     /// Folders where agents worked recently that aren't on the board (see ProjectDiscovery).
     @Published var suggestions: [ProjectDiscovery.Candidate] = []
@@ -92,6 +93,7 @@ final class Store: ObservableObject {
         if lastWork != s.lastWork { lastWork = s.lastWork }
         if reservations != s.reservations { reservations = s.reservations }
         if subagents != s.subagents { subagents = s.subagents }
+        if memory != s.memory { memory = s.memory }
     }
 
 
@@ -284,6 +286,9 @@ final class Store: ObservableObject {
     func reservations(of agent: String) -> [Reservation] { reservations.filter { $0.agentId == agent } }
     func subagents(of agent: String) -> [SubagentItem] { subagents.filter { $0.agentId == agent } }
     func dropReservation(_ id: Int64) { core { $0.dropReservation(id: id) } }
+    func memory(of project: String) -> [MemoryItem] { memory.filter { $0.projectId == project } }
+    func remember(project: String, text: String) { core { $0.remember(project: project, text: text, by: nil); $0.changed() } }
+    func forget(_ m: MemoryItem) { core { _ = $0.forget(memory: m.id, project: m.projectId); $0.changed() } }
     func pinAgent(_ id: String, to project: String) { core { $0.pinAgent(id, to: project) } }
 
     // MARK: Getting to an agent
