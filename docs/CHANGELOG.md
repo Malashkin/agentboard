@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a Gemini session gets a card, the feed, the rules, reservations (a refused edit comes back as
   `decision: deny`), messages (AfterAgent keeps it going when one is waiting) and terminal delivery.
   Needs Gemini CLI 0.26+.
+- **Replay a session.** *Replay* in an agent's details steps through everything it did — requests, commands,
+  edits, failures, answers — with a slider, play, a jump list of its requests and *Since I was away*. Every edit
+  step now carries its diff (Edit / MultiEdit old → new, Write's new content; bounded), and two edits of the same
+  file in a row are two steps instead of one. A side list shows the files changed from the current step on.
 - **Hand work from one session to another.** Right-click a card → *Brief another agent on X's work* / *Brief X
   on…*: AgentBoard writes a briefing from what it saw (the human's requests, files, commits, reservations, the
   last reply — agent text neutralized and fenced) and puts it in the other agent's context; one sitting at its
@@ -106,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 404 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 412 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

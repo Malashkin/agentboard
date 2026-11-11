@@ -528,8 +528,9 @@ final class Core {
 
     /// Raw activity (commands, edits). Hidden from the feed by default, used by agent_activity and summaries.
     func addAction(agent: Agent, title: String, detail: String, sub: String = "") {
-        let last = db.query("SELECT title, sub FROM events WHERE agent_id=? ORDER BY id DESC LIMIT 1", [agent.id]).first
-        if last?.s("title") == title && last?.s("sub") == sub { return }
+        let last = db.query("SELECT title, sub, detail FROM events WHERE agent_id=? ORDER BY id DESC LIMIT 1", [agent.id]).first
+        // The same action twice in a row is one step — unless it changed something different (two edits of one file).
+        if last?.s("title") == title && last?.s("sub") == sub && last?.s("detail") == detail.trimmed { return }
         addEvent(project: agent.projectId, agent: agent.id, kind: "action", title: title, detail: detail.trimmed, sub: sub)
     }
 
@@ -986,7 +987,7 @@ final class Core {
                 }
                 setAgent(agent.id, ["status": "working", "last_action": label("\(verb) \(rel)")])
                 touchFile(agent: agent, path: rel)
-                act("\(verb) \(rel)", "")
+                act("\(verb) \(rel)", Self.editDiff(tool, input))
                 let others = AppSettings.conflictWarnings ? othersTouching(path: rel, project: project.id, except: agent.id) : []
                 if !others.isEmpty {
                     let names = others.map(\.name).joined(separator: ", ")
@@ -1147,6 +1148,28 @@ final class Core {
     }
 
     /// Human-readable line for any Claude Code tool call.
+    /// What an edit changes, as diff lines ("- old", "+ new") for the session replay. Bounded: big writes are cut.
+    static func editDiff(_ tool: String, _ input: JSON) -> String {
+        func lines(_ s: String, _ mark: String, max: Int) -> [String] {
+            let all = s.components(separatedBy: "\n")
+            return all.prefix(max).map { mark + $0 } + (all.count > max ? ["\(mark)… \(all.count - max) more lines"] : [])
+        }
+        func pair(_ old: String, _ new: String) -> [String] { lines(old, "-", max: 60) + lines(new, "+", max: 60) }
+        var out: [String] = []
+        switch tool {
+        case "Edit": out = pair(input.s("old_string"), input.s("new_string"))
+        case "MultiEdit":
+            for (i, e) in ((input["edits"] as? [JSON]) ?? []).prefix(8).enumerated() {
+                if i > 0 { out.append("@@") }
+                out += pair(e.s("old_string"), e.s("new_string"))
+            }
+        case "Write": out = lines(input.s("content"), "+", max: 120)
+        case "NotebookEdit": out = lines(input.s("new_source"), "+", max: 80)
+        default: return ""
+        }
+        return out.joined(separator: "\n").trunc(7000)
+    }
+
     static func describeTool(_ tool: String, _ input: JSON, agent: Agent, project: Project, core: Core) -> (String, String) {
         func rel(_ p: String) -> String { core.relativePath(p, agent: agent, project: project) }
         switch tool {

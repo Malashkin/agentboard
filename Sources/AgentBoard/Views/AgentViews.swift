@@ -266,6 +266,7 @@ struct AgentDetailSheet: View {
     let agentId: String
     @State private var name = ""
     @State private var messaging = false
+    @State private var replaying = false
 
     var body: some View {
         if let a = store.agent(agentId) {
@@ -400,6 +401,8 @@ struct AgentDetailSheet: View {
                 }
                 HStack {
                     Button { messaging = true } label: { Label("Message the session", systemImage: "text.bubble") }
+                    Button { replaying = true } label: { Label("Replay", systemImage: "play.square.stack") }
+                        .help("Step through everything it did, with the diff of every edit")
                     if !a.transcriptPath.isEmpty {
                         Button { revealInFinder(a.transcriptPath) } label: { Label("Transcript", systemImage: "doc.text") }
                     }
@@ -413,6 +416,7 @@ struct AgentDetailSheet: View {
             .frame(width: 760)
             .onAppear { name = a.name }
             .sheet(isPresented: $messaging) { MessageSheet(target: MessageTarget(projectId: a.projectId, agent: a.id)) }
+            .sheet(isPresented: $replaying) { ReplaySheet(agent: a).environmentObject(store) }
         } else {
             Text("Agent not found").padding(40)
         }

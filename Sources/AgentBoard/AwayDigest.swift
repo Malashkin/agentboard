@@ -18,6 +18,8 @@ struct AwayDigest: Equatable {
 final class AwayWatcher {
     static let shared = AwayWatcher()
     private var awaySince: Double?
+    /// When the human last left the Mac (kept after they come back), for "since I was away" in the replay.
+    private(set) var lastAwayStart: Double?
     private let queue = DispatchQueue(label: "agentboard.away")
 
     func start() {
@@ -33,7 +35,7 @@ final class AwayWatcher {
         if !NSApp.isActive { awaySince = now() }
     }
 
-    private func left() { if awaySince == nil { awaySince = now() } }
+    private func left() { if awaySince == nil { awaySince = now(); lastAwayStart = awaySince } }
 
     private func back() {
         guard let since = awaySince else { return }

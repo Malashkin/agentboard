@@ -22,6 +22,8 @@ updated: 2026-11-11
 - **Open sessions appear by themselves** — every open Claude Code session in a project is on the board as
   soon as the app starts, read from `~/.claude/sessions`, even before the hooks are connected.
 - **Live session status** from Claude Code's own session files (closed terminal → finished).
+- **Replay** of a session — every step in order with the diff of each edit; slider, play, jump to a request or
+  to "since I was away".
 - **History** of any day, including sessions and commits from before AgentBoard was installed (imported).
 - **Sidebar** shows the date of the last work per project. Right-click a project → *Rename…* (name shown in
   AgentBoard only), *Open in Finder*, *Remove from AgentBoard…* — keep its history (adding the folder again

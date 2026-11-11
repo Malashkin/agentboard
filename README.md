@@ -73,6 +73,8 @@ AgentBoard sits next to your agents and turns all of that into one live board.
 - **Real session status.** AgentBoard reads Claude Code's own session files and checks the
   process behind each one, so an idle-but-open terminal stays "idle" and a closed terminal is
   marked "finished" even if no goodbye event arrived.
+- **Replay any session.** Step through what an agent did — every request, command and edit with its diff —
+  with a slider, or jump straight to "since I was away".
 - **History for any past day**, including sessions that ran *before* you installed AgentBoard:
   past Claude Code transcripts, Codex logs and git commits are imported when you add a project.
 
@@ -204,7 +206,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 404 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 412 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

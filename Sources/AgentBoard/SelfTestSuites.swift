@@ -851,6 +851,31 @@ extension SelfTest {
               "the other agent gets the note and the briefing at its next step — as a peer's information", got.trunc(240))
         check(tool("handoff", ["agent_id": mx.id, "to": mx.name]).error, "handing work to yourself is refused")
 
+        section("Replay: every step, with the diff of every edit")
+        _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "mx", "cwd": repo, "prompt": "Rename tokenize to lex"])
+        _ = hook(["hook_event_name": "PreToolUse", "session_id": "mx", "cwd": repo, "tool_name": "Edit",
+                  "tool_input": ["file_path": repo + "/src/parser/lexer.ts", "old_string": "function tokenize(", "new_string": "function lex("]])
+        _ = hook(["hook_event_name": "PreToolUse", "session_id": "mx", "cwd": repo, "tool_name": "Edit",
+                  "tool_input": ["file_path": repo + "/src/parser/lexer.ts", "old_string": "tokenize(src)", "new_string": "lex(src)"]])
+        _ = hook(["hook_event_name": "PreToolUse", "session_id": "mx", "cwd": repo, "tool_name": "Write",
+                  "tool_input": ["file_path": repo + "/src/parser/NOTES.md", "content": "# Notes\nlex() replaces tokenize()"]])
+        let steps = Replay.steps(agent: mx.id, core: core)
+        let edits = steps.filter { $0.title.contains("editing src/parser/lexer.ts") }
+        check(edits.count >= 2, "two edits of the same file in a row are two steps, not one", "\(edits.count)")
+        check(edits.last?.detail == "-tokenize(src)\n+lex(src)", "each edit step carries its diff", edits.last?.detail ?? "nil")
+        check(steps.last?.detail == "+# Notes\n+lex() replaces tokenize()", "a written file shows its new content", steps.last?.detail ?? "nil")
+        check(zip(steps, steps.dropFirst()).allSatisfy { $0.createdAt <= $1.createdAt }, "steps run oldest first")
+        let chapter = Replay.chapters(steps).last.map { steps[$0].title } ?? ""
+        check(chapter.contains("Rename tokenize"), "each request starts a chapter", chapter)
+        let from = Replay.chapters(steps).last ?? 0
+        let changed = Replay.changedFiles(steps, from: from)
+        check(changed.first?.0 == "src/parser/lexer.ts" && changed.first?.1 == 2 && changed.contains { $0.0 == "src/parser/NOTES.md" },
+              "files changed from a step on, with how many edits each", "\(changed)")
+        check(Replay.index(at: steps.last!.createdAt + 10, in: steps) == steps.count - 1 && Replay.index(at: 0, in: steps) == 0,
+              "jumping to a time lands on the first step after it")
+        let long = Core.editDiff("Write", ["content": Array(repeating: "x", count: 500).joined(separator: "\n")])
+        check(long.components(separatedBy: "\n").count <= 122 && long.hasSuffix("more lines"), "a huge write is cut, and says so")
+
         section("Delivering a human message into a session")
         _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "mx", "cwd": repo, "prompt": "Refactor the parser please"])
         let r = SessionDelivery.run(agentId: mx.id, text: "also update the docs", mode: .auto)
