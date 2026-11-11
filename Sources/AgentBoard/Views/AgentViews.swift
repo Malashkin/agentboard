@@ -96,13 +96,16 @@ struct AgentCard: View {
                     if st != .ended {
                         Button { store.focusTerminal(agent) { replyResult = $0 } } label: {
                             Label("Terminal", systemImage: "terminal").labelStyle(.titleAndIcon)
-                                .font(.callout.weight(.medium))
+                                .font(.callout.weight(.medium)).lineLimit(1).fixedSize()
                         }
                         .buttonStyle(.hoverBordered)
                         .help("Bring its terminal to the front (⌥⌘J — the next agent that needs you)")
                     }
-                    Button { onMessage() } label: { Image(systemName: "text.bubble").font(.callout) }
-                        .buttonStyle(.hover).help("Message the agent's session")
+                    Button { onMessage() } label: {
+                        Label("Message", systemImage: "text.bubble").labelStyle(.titleAndIcon)
+                            .font(.callout.weight(.medium)).lineLimit(1).fixedSize()
+                    }
+                    .buttonStyle(.hoverBordered).help("Message the agent's session")
                 }
                 .font(.caption)
             }
