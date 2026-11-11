@@ -347,6 +347,9 @@ extension SelfTest {
         check(TerminalFocus.terminalScript(tty: "/dev/ttys004").contains(#"tty of t is "/dev/ttys004""#)
                 && TerminalFocus.itermScript(tty: "/dev/ttys004").contains(#"tty of s is "/dev/ttys004""#),
               "the terminal is found by the agent's own tty, not by window title")
+        check(SessionDelivery.isAutomationDenied("error -1743: Not authorized to send Apple events to iTerm2.")
+                && !SessionDelivery.isAutomationDenied("no") && !SessionDelivery.isAutomationDenied("ok"),
+              "a refused Automation permission is recognised, so the human is told where to allow it")
         check(Herdr.clientTTY(psOutput: "??       /Applications/Foo\nttys002  -zsh\nttys007  /Users/x/.local/bin/herdr\n") == "/dev/ttys007"
                 && Herdr.clientTTY(psOutput: "??  /Users/x/.local/bin/herdr\nttys001  herdr-helper\n") == nil,
               "a herdr agent: the window to raise is the one the herdr client runs in (a server without a terminal doesn't count)")

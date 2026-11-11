@@ -30,11 +30,19 @@ enum TerminalFocus {
                 .split(separator: "\n").map(String.init).filter { $0.hasPrefix("/dev/") }
             if let c = clients.first { tty = c } else { return .success("tmux \(pane) (no attached client to raise)") }
         }
-        if SessionDelivery.isRunning("com.googlecode.iterm2"), SessionDelivery.osa(itermScript(tty: tty)) == "ok" {
-            return .success(how + "iTerm2")
+        var denied: [String] = []
+        if SessionDelivery.isRunning("com.googlecode.iterm2") {
+            let r = SessionDelivery.osa(itermScript(tty: tty))
+            if r == "ok" { return .success(how + "iTerm2") }
+            if SessionDelivery.isAutomationDenied(r) { denied.append("iTerm2") }
         }
-        if SessionDelivery.isRunning("com.apple.Terminal"), SessionDelivery.osa(terminalScript(tty: tty)) == "ok" {
-            return .success(how + "Terminal")
+        if SessionDelivery.isRunning("com.apple.Terminal") {
+            let r = SessionDelivery.osa(terminalScript(tty: tty))
+            if r == "ok" { return .success(how + "Terminal") }
+            if SessionDelivery.isAutomationDenied(r) { denied.append("Terminal") }
+        }
+        if !denied.isEmpty {
+            return .failure(.init("macOS doesn't let AgentBoard control \(denied.joined(separator: " and ")). Allow it in System Settings → Privacy & Security → Automation → AgentBoard, then try again."))
         }
         return .failure(.init("\(a.name)'s terminal (\(tty)) isn't a Terminal.app or iTerm2 tab AgentBoard can raise"))
     }

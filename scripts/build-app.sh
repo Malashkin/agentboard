@@ -36,6 +36,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>AgentBoard brings an agent's terminal tab to the front and types your replies into it (Terminal, iTerm2).</string>
   <key>NSHumanReadableCopyright</key><string>AgentBoard</string>
 </dict>
 </plist>

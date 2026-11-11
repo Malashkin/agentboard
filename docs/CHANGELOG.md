@@ -68,6 +68,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *Connect Claude Code* (hooks + MCP).
 
 ### Fixed
+- **The Terminal button did nothing.** The app had no `NSAppleEventsUsageDescription`, so macOS silently refused
+  to let it control iTerm2 / Terminal (no prompt at all); AppleScript now runs inside the app, macOS asks once,
+  and a refusal says where to allow it (System Settings → Privacy & Security → Automation). The agent's terminal
+  is now found from Claude Code's session file (its pid → its tty) instead of guessing by folder — hooks run
+  without a terminal, so the tty they report was always empty.
 - The "Claude is waiting for your input" nudge after a turn no longer pops a macOS *waiting for you*
   notification (the card already showed the agent as idle).
 - Auto mode no longer types into an agent that herdr sees as **working** while the board still thought it
@@ -120,7 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 425 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 426 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

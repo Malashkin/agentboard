@@ -143,6 +143,11 @@ enum SessionDelivery {
 
     /// The agent's terminal device (`/dev/ttysNNN`), from its hooks or by looking up its process.
     static func terminalTTY(_ a: Agent) -> String? {
+        // Claude Code's own session file names the process; its terminal is exact (several sessions can share a folder).
+        if a.tool == "claude", let l = SessionLiveness.shared.liveSessions()?[a.sessionId] {
+            let t = SessionLiveness.tty(pid: l.pid)
+            if !t.isEmpty { return t }
+        }
         var tty = a.tty
         if tty.isEmpty || a.tool == "codex" { tty = findTTY(tool: a.tool, cwd: a.cwd) ?? tty }
         guard tty.hasPrefix("/dev/"), Core.isTTYName(String(tty.dropFirst(5))) else { return nil }
@@ -153,9 +158,20 @@ enum SessionDelivery {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).isEmpty
     }
 
+    /// Runs AppleScript inside the app (so macOS asks *AgentBoard* for Automation access — a child osascript is
+    /// refused silently). Returns the script's result, or "error <n>: …" on failure.
     static func osa(_ script: String) -> String {
-        Shell.run("/usr/bin/osascript", ["-e", script], timeout: 15).line
+        func run() -> String {
+            var err: NSDictionary?
+            let out = NSAppleScript(source: script)?.executeAndReturnError(&err)
+            if let err { return "error \(err[NSAppleScript.errorNumber] ?? ""): \(err[NSAppleScript.errorMessage] ?? "")" }
+            return out?.stringValue ?? ""
+        }
+        return Thread.isMainThread ? run() : DispatchQueue.main.sync(execute: run)
     }
+
+    /// AppleScript error -1743: the human hasn't allowed AgentBoard to control that app.
+    static func isAutomationDenied(_ result: String) -> Bool { result.hasPrefix("error -1743") || result.hasPrefix("error -1744") }
 
     static func tmuxPane(tty: String) -> String? {
         guard let tmux = Shell.which("tmux") else { return nil }
