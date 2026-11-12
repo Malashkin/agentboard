@@ -105,9 +105,18 @@ struct Agent: Identifiable, Hashable {
     /// Plain-language "what it's doing now", written by the narrator.
     var narrative: String
     var narrativeAt: Double
+    /// The task the human gave it, summarized in plain words ("" until the narrator has run).
+    var goal: String
+    /// 0…100, or -1 when unknown.
+    var progress: Int
+    /// What it has finished in this session, plain words, newest first.
+    var doneList: [String]
 
     init(_ r: Row) {
         tty = r.s("tty"); stuck = r.s("stuck"); narrative = r.s("narrative"); narrativeAt = r.d("narrative_at")
+        goal = r.s("goal")
+        progress = r.oi("progress").map { Int($0) } ?? -1
+        doneList = (parseJSON(Data(r.s("done_list").utf8)) as? [String]) ?? []
         id = r.s("id"); projectId = r.s("project_id"); tool = r.s("tool"); sessionId = r.s("session_id")
         name = r.s("name"); cwd = r.s("cwd"); root = r.s("root"); branch = r.s("branch"); status = r.s("status")
         lastPrompt = r.s("last_prompt"); focus = r.s("focus"); lastAction = r.s("last_action")

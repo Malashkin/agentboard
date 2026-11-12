@@ -132,9 +132,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Debug aid: AGENTBOARD_SNAPSHOT=/path.png saves an image of the main window (no screen-recording permission needed).
         if let shot = ProcessInfo.processInfo.environment["AGENTBOARD_SNAPSHOT"] {
             let delay = Double(ProcessInfo.processInfo.environment["AGENTBOARD_SNAPSHOT_DELAY"] ?? "") ?? 4
+            // AGENTBOARD_OPEN_AGENT=<agent id>: the agent's details instead of the main window.
+            let openAgent = ProcessInfo.processInfo.environment["AGENTBOARD_OPEN_AGENT"].flatMap { $0.isEmpty ? nil : $0 }
+            var detailWindow: NSWindow?
+            if let id = openAgent {
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(1, delay - 2)) {
+                    let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
+                    w.appearance = NSApp.effectiveAppearance
+                    w.contentView = NSHostingView(rootView: AgentDetailSheet(agentId: id).environmentObject(store)
+                        .hoverButtons().background(Color(nsColor: .windowBackgroundColor)))
+                    w.orderFront(nil)
+                    detailWindow = w
+                }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.frame.width > 600 }),
-                      let v = w.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return }
+                let target = detailWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.frame.width > 600 })
+                guard let w = target, let v = w.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return }
                 v.cacheDisplay(in: v.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: shot))
             }

@@ -59,6 +59,9 @@ AgentBoard sits next to your agents and turns all of that into one live board.
   superhero name (100 built in — Batman, Storm, Groot…), unique across all open sessions.
   The card shows status (working / waiting for you / idle / stuck / finished), project, branch,
   current task, the files it touches and its last action.
+- **Each card answers three questions in plain words:** what task you gave it (summarized), how far along it is
+  (a progress bar with %), and what it is doing right now. Open an agent to read what it has already done —
+  results, closed tasks, commits — with the technical details folded away.
 - **"What is it doing?" in plain words.** A small model (Claude Haiku via `claude -p`) writes one
   or two sentences per agent — *"Benchmarking Whisper on long and short clips to decide whether
   the Neural Engine build is worth switching to."* — refreshed only when the agent actually did
@@ -212,7 +215,7 @@ MCP tools: `board`, `agent_activity`, `send_message`, `post_note`, `list_tasks`,
 ## Development
 
 ```sh
-./scripts/test.sh                                    # build + 426 checks (unit, contract, integration) on throwaway data
+./scripts/test.sh                                    # build + 433 checks (unit, contract, integration) on throwaway data
 swift build && .build/debug/AgentBoard -port 7788    # debug instance on another port
 AGENTBOARD_DATA_DIR=/tmp/ab AGENTBOARD_BRIDGE_DIR=/tmp/ab/bridge CLAUDE_CONFIG_DIR=/tmp/ab/claude \
   CODEX_HOME=/tmp/ab/codex .build/debug/AgentBoard -port 7788   # fully isolated

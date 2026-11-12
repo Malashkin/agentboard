@@ -27,25 +27,34 @@ struct AgentCard: View {
                     let unread = store.undelivered(to: agent.id)
                     if unread > 0 { Pill(text: "\(unread) undelivered", color: .teal, icon: "envelope") }
                 }
-                if let t = store.currentTask(of: agent.id) {
-                    Label("#\(t.id) \(t.title)" + (t.client.isEmpty ? "" : " · \(t.client)"), systemImage: "checklist")
-                        .font(.callout).lineLimit(2)
+                // The task, in the human's terms, and how far along it is.
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("TASK").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                        if let t = store.currentTask(of: agent.id) {
+                            Text("#\(t.id)" + (t.client.isEmpty ? "" : " · \(t.client)")).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if agent.progress >= 0 {
+                            Text("\(agent.progress)%").font(.caption.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(agent.progress >= 100 ? .green : .primary)
+                        }
+                    }
+                    Text(goalText.isEmpty ? "No task yet — give it one in its terminal or below." : goalText)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(goalText.isEmpty ? .secondary : .primary)
+                        .lineLimit(2, reservesSpace: true)
+                    if agent.progress >= 0 { ProgressBar(value: Double(agent.progress) / 100, color: agent.progress >= 100 ? .green : st.color) }
                 }
-                if !agent.focus.isEmpty {
-                    Label(agent.focus, systemImage: "scope").font(.callout).lineLimit(2)
-                }
-                // What it's doing, in plain words (fixed height so the card never jumps).
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "text.quote").foregroundStyle(Color.accentColor)
+                // What it's doing right now, in plain words (fixed height so the card never jumps).
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("NOW").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                     Text(agent.narrative.isEmpty ? "I'll describe what it's doing after its first actions…" : agent.narrative)
-                        .font(.callout.weight(.medium))
+                        .font(.callout)
                         .foregroundStyle(agent.narrative.isEmpty ? .secondary : .primary)
                         .lineLimit(3, reservesSpace: true)
                         .help(agent.narrative.isEmpty ? "" : "Updated \(Fmt.rel(agent.narrativeAt, now: store.now))")
                 }
-                // Fixed height, so a new prompt doesn't resize the card and reflow the grid.
-                Text(agent.lastPrompt.isEmpty ? " " : "«\(agent.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression).oneLine.trimmed)»").font(.callout).foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
                 if !agent.stuck.isEmpty && st == .stuck {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.red)
@@ -55,25 +64,6 @@ struct AgentCard: View {
                     }
                     .padding(6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.08)))
-                }
-                let subs = store.subagents(of: agent.id)
-                if !subs.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(subs.filter(\.isRunning).prefix(4)) { s in
-                            Pill(text: s.type, color: .green, icon: "arrow.turn.down.right")
-                        }
-                        let done = subs.filter { !$0.isRunning }.count
-                        if done > 0 { Pill(text: "\(done) subagent(s) done", color: .secondary) }
-                    }
-                }
-                let held = store.reservations(of: agent.id)
-                if !held.isEmpty {
-                    Label(held.map(\.pattern).joined(separator: " · "), systemImage: "lock.fill")
-                        .font(.caption.monospaced()).foregroundStyle(.orange).lineLimit(1).truncationMode(.middle)
-                }
-                let files = store.files(of: agent.id).prefix(4).map(\.path)
-                if !files.isEmpty {
-                    Text(files.joined(separator: " · ")).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 if st == .waiting || st == .idle || st == .stuck {
                     // Answer the agent right here: typed into its terminal when it waits, queued otherwise.
@@ -89,10 +79,13 @@ struct AgentCard: View {
                 if let replyResult { Text(replyResult).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
                 Divider()
                 HStack(spacing: 6) {
-                    Image(systemName: "bolt").foregroundStyle(.secondary)
-                    Text(agent.lastAction.isEmpty ? "—" : agent.lastAction).lineLimit(1).truncationMode(.tail)
+                    let done = agent.doneList.count
+                    if done > 0 {
+                        Label("\(done) done", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                            .help(agent.doneList.prefix(4).joined(separator: "\n"))
+                    }
+                    Text("active " + Fmt.rel(agent.lastSeen, now: store.now)).foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
-                    Text(Fmt.rel(agent.lastSeen, now: store.now)).foregroundStyle(.secondary)
                     if st != .ended {
                         Button { store.focusTerminal(agent) { replyResult = $0 } } label: {
                             Label("Terminal", systemImage: "terminal").labelStyle(.titleAndIcon)
@@ -131,6 +124,14 @@ struct AgentCard: View {
                 Button("Open its terminal") { store.focusTerminal(agent) { replyResult = $0 } }
             }
         }
+    }
+
+    /// The goal in the human's terms: the narrator's summary, else the task title, else the request itself.
+    var goalText: String {
+        if !agent.goal.isEmpty { return agent.goal }
+        if let t = store.currentTask(of: agent.id) { return t.title }
+        return agent.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression)
+            .oneLine.trimmed.trunc(140)
     }
 
     func sendReply() {
@@ -188,6 +189,8 @@ struct AgentsGrid: View {
             }
         }
         .animateRows(list.map(\.id))
+        // Debug aid (with AGENTBOARD_SNAPSHOT): AGENTBOARD_OPEN_AGENT=<agent id> opens that agent's details.
+
         .sheet(item: $detail) { a in AgentDetailSheet(agentId: a.id) }
         .sheet(item: $messageTo) { t in MessageSheet(target: t) }
     }
@@ -288,125 +291,130 @@ struct AgentDetailSheet: View {
                     Button("Done") { if name != a.name { store.renameAgent(a.id, name) }; dismiss() }
                         .keyboardShortcut(.defaultAction)
                 }
-                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
-                    GridRow { Text("ID").foregroundStyle(.secondary); Text(a.id).textSelection(.enabled) }
-                    GridRow { Text("Tool").foregroundStyle(.secondary); Text(a.toolLabel) }
-                    GridRow { Text("Folder").foregroundStyle(.secondary); Text(a.cwd).textSelection(.enabled).lineLimit(1).truncationMode(.middle) }
-                    GridRow { Text("Branch").foregroundStyle(.secondary); Text(a.branch.isEmpty ? "—" : a.branch) }
-                    GridRow {
-                        Text("Project").foregroundStyle(.secondary)
-                        Picker("", selection: Binding(get: { a.projectId }, set: { store.pinAgent(a.id, to: $0) })) {
-                            ForEach(store.projects) { Text($0.name).tag($0.id) }
-                        }
-                        .labelsHidden().frame(width: 220)
-                        .help("Pin this session to a project (sessions started in ~ or ~/Desktop are guessed from the files they touch)")
-                    }
-                    GridRow { Text("Started").foregroundStyle(.secondary); Text(Fmt.rel(a.startedAt, now: store.now)) }
-                    GridRow { Text("Focus").foregroundStyle(.secondary); Text(a.focus.isEmpty ? "—" : a.focus) }
-                }
-                .font(.callout)
-                if !a.narrative.isEmpty {
-                    GroupBox("Now") {
-                        HStack(alignment: .top) {
-                            Text(a.narrative).font(.callout).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-                            Text(Fmt.rel(a.narrativeAt, now: store.now)).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if !a.lastPrompt.isEmpty {
-                    GroupBox("Last request") {
-                        ScrollView { Text(a.lastPrompt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
-                            .frame(maxHeight: 90)
-                    }
-                }
-                HStack(alignment: .top, spacing: 12) {
-                    GroupBox("Files") {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 3) {
-                                ForEach(store.files(of: a.id)) { f in
-                                    HStack {
-                                        Text(f.path).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
-                                        Spacer()
-                                        Text("×\(f.count)").font(.caption).foregroundStyle(.secondary).smoothNumber(f.count, Double(f.count))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        AgentStory(agent: a)
+                        DisclosureGroup("Technical details: folder, files, timeline, subagents, reservations") {
+                            VStack(alignment: .leading, spacing: 12) {
+                            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                                GridRow { Text("ID").foregroundStyle(.secondary); Text(a.id).textSelection(.enabled) }
+                                GridRow { Text("Tool").foregroundStyle(.secondary); Text(a.toolLabel) }
+                                GridRow { Text("Folder").foregroundStyle(.secondary); Text(a.cwd).textSelection(.enabled).lineLimit(1).truncationMode(.middle) }
+                                GridRow { Text("Branch").foregroundStyle(.secondary); Text(a.branch.isEmpty ? "—" : a.branch) }
+                                GridRow {
+                                    Text("Project").foregroundStyle(.secondary)
+                                    Picker("", selection: Binding(get: { a.projectId }, set: { store.pinAgent(a.id, to: $0) })) {
+                                        ForEach(store.projects) { Text($0.name).tag($0.id) }
                                     }
+                                    .labelsHidden().frame(width: 220)
+                                    .help("Pin this session to a project (sessions started in ~ or ~/Desktop are guessed from the files they touch)")
                                 }
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .frame(width: 260)
-                    GroupBox("Timeline") {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(store.events.filter { $0.agentId == a.id }.prefix(150)) { e in
-                                    HStack(alignment: .top, spacing: 6) {
-                                        Text(Fmt.time(e.createdAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                        Image(systemName: e.icon).foregroundStyle(e.color).font(.caption)
-                                        Text((e.sub.isEmpty || e.title.hasPrefix("↳") ? "" : "↳ \(e.sub): ") + e.title)
-                                            .font(.caption).lineLimit(3).textSelection(.enabled)
-                                            .padding(.leading, e.sub.isEmpty ? 0 : 10)
-                                    }
+                                GridRow { Text("Started").foregroundStyle(.secondary); Text(Fmt.rel(a.startedAt, now: store.now)) }
+                                GridRow { Text("Focus").foregroundStyle(.secondary); Text(a.focus.isEmpty ? "—" : a.focus) }
+                            }
+                            .font(.callout)
+                            if !a.lastPrompt.isEmpty {
+                                GroupBox("Last request") {
+                                    ScrollView { Text(a.lastPrompt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
+                                        .frame(maxHeight: 90)
                                 }
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
-                .frame(height: 280)
-                let subs = store.subagents(of: a.id)
-                if !subs.isEmpty {
-                    GroupBox("Subagents") {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(subs.reversed()) { s in
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Image(systemName: s.isRunning ? "bolt.fill" : "checkmark.circle")
-                                            .foregroundStyle(s.isRunning ? .green : .secondary)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            HStack {
-                                                Text(s.type).font(.callout.weight(.medium))
-                                                if !s.description.isEmpty { Text(s.description).font(.caption).foregroundStyle(.secondary) }
-                                                Spacer()
-                                                Text(Fmt.time(s.startedAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            }
+                            HStack(alignment: .top, spacing: 12) {
+                                GroupBox("Files") {
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            ForEach(store.files(of: a.id)) { f in
+                                                HStack {
+                                                    Text(f.path).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                                                    Spacer()
+                                                    Text("×\(f.count)").font(.caption).foregroundStyle(.secondary).smoothNumber(f.count, Double(f.count))
+                                                }
                                             }
-                                            let line = s.isRunning ? s.lastAction : s.result
-                                            if !line.isEmpty { Text(line.oneLine).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
-                                        }
+                                        }.frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                 }
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                        }.frame(maxHeight: 140)
-                    }
-                }
-                let held = store.reservations(of: a.id)
-                if !held.isEmpty {
-                    GroupBox("File reservations") {
-                        VStack(alignment: .leading, spacing: 3) {
-                            ForEach(held) { r in
-                                HStack {
-                                    Image(systemName: "lock.fill").foregroundStyle(.orange)
-                                    Text(r.pattern).font(.caption.monospaced())
-                                    if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary) }
-                                    Spacer()
-                                    Text("until \(Fmt.time(r.expiresAt))").font(.caption)
-                                    Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.hover)
+                                .frame(width: 260)
+                                GroupBox("Timeline") {
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            ForEach(store.events.filter { $0.agentId == a.id }.prefix(150)) { e in
+                                                HStack(alignment: .top, spacing: 6) {
+                                                    Text(Fmt.time(e.createdAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                                    Image(systemName: e.icon).foregroundStyle(e.color).font(.caption)
+                                                    Text((e.sub.isEmpty || e.title.hasPrefix("↳") ? "" : "↳ \(e.sub): ") + e.title)
+                                                        .font(.caption).lineLimit(3).textSelection(.enabled)
+                                                        .padding(.leading, e.sub.isEmpty ? 0 : 10)
+                                                }
+                                            }
+                                        }.frame(maxWidth: .infinity, alignment: .leading)
+                                    }
                                 }
                             }
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                let inbox = store.inbox(of: a.id)
-                if !inbox.isEmpty {
-                    GroupBox("Messages to the agent") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(inbox.prefix(6)) { m in
-                                HStack(alignment: .top) {
-                                    Image(systemName: m.deliveredAt == nil ? "clock" : "checkmark")
-                                        .foregroundStyle(m.deliveredAt == nil ? .orange : .green)
-                                    Text("\(m.fromLabel): \(m.text)").font(.caption).lineLimit(2)
+                            .frame(height: 280)
+                            let subs = store.subagents(of: a.id)
+                            if !subs.isEmpty {
+                                GroupBox("Subagents") {
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            ForEach(subs.reversed()) { s in
+                                                HStack(alignment: .top, spacing: 8) {
+                                                    Image(systemName: s.isRunning ? "bolt.fill" : "checkmark.circle")
+                                                        .foregroundStyle(s.isRunning ? .green : .secondary)
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack {
+                                                            Text(s.type).font(.callout.weight(.medium))
+                                                            if !s.description.isEmpty { Text(s.description).font(.caption).foregroundStyle(.secondary) }
+                                                            Spacer()
+                                                            Text(Fmt.time(s.startedAt)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                                        }
+                                                        let line = s.isRunning ? s.lastAction : s.result
+                                                        if !line.isEmpty { Text(line.oneLine).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                                                    }
+                                                }
+                                            }
+                                        }.frame(maxWidth: .infinity, alignment: .leading)
+                                    }.frame(maxHeight: 140)
                                 }
                             }
-                        }.frame(maxWidth: .infinity, alignment: .leading)
+                            let held = store.reservations(of: a.id)
+                            if !held.isEmpty {
+                                GroupBox("File reservations") {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        ForEach(held) { r in
+                                            HStack {
+                                                Image(systemName: "lock.fill").foregroundStyle(.orange)
+                                                Text(r.pattern).font(.caption.monospaced())
+                                                if !r.reason.isEmpty { Text(r.reason).font(.caption).foregroundStyle(.secondary) }
+                                                Spacer()
+                                                Text("until \(Fmt.time(r.expiresAt))").font(.caption)
+                                                Button { store.dropReservation(r.id) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.hover)
+                                            }
+                                        }
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                            let inbox = store.inbox(of: a.id)
+                            if !inbox.isEmpty {
+                                GroupBox("Messages to the agent") {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        ForEach(inbox.prefix(6)) { m in
+                                            HStack(alignment: .top) {
+                                                Image(systemName: m.deliveredAt == nil ? "clock" : "checkmark")
+                                                    .foregroundStyle(m.deliveredAt == nil ? .orange : .green)
+                                                Text("\(m.fromLabel): \(m.text)").font(.caption).lineLimit(2)
+                                            }
+                                        }
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                            }
+                            .padding(.top, 8)
+                        }
+                        .font(.callout)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxHeight: 640)
                 HStack {
                     Button { messaging = true } label: { Label("Message the session", systemImage: "text.bubble") }
                     Button { replaying = true } label: { Label("Replay", systemImage: "play.square.stack") }
@@ -428,5 +436,73 @@ struct AgentDetailSheet: View {
         } else {
             Text("Agent not found").padding(40)
         }
+    }
+}
+
+
+/// The session in a manager's terms: the task, how far along, what it is doing, and what it has finished.
+struct AgentStory: View {
+    @EnvironmentObject var store: Store
+    let agent: Agent
+
+    var body: some View {
+        let st = store.status(agent)
+        let tasks = store.tasks.filter { $0.assignee == agent.id }
+        let commits = store.events.filter { $0.agentId == agent.id && $0.kind == "commit" }.prefix(8)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Task").font(.headline)
+                    Spacer()
+                    if agent.progress >= 0 {
+                        Text("\(agent.progress)% done").font(.callout.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(agent.progress >= 100 ? .green : .primary)
+                    }
+                }
+                Text(goal.isEmpty ? "No task yet." : goal).font(.title3.weight(.semibold))
+                    .foregroundStyle(goal.isEmpty ? .secondary : .primary).textSelection(.enabled)
+                if agent.progress >= 0 { ProgressBar(value: Double(agent.progress) / 100, color: agent.progress >= 100 ? .green : st.color) }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Now").font(.headline)
+                    Spacer()
+                    if agent.narrativeAt > 0 { Text("updated " + Fmt.rel(agent.narrativeAt, now: store.now)).font(.caption).foregroundStyle(.secondary) }
+                }
+                Text(agent.narrative.isEmpty ? "I'll describe what it's doing after its first actions…" : agent.narrative)
+                    .foregroundStyle(agent.narrative.isEmpty ? .secondary : .primary).textSelection(.enabled)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("What it has done").font(.headline)
+                if agent.doneList.isEmpty && tasks.isEmpty && commits.isEmpty {
+                    Text("Nothing finished yet.").foregroundStyle(.secondary)
+                }
+                ForEach(Array(agent.doneList.enumerated()), id: \.offset) { _, line in
+                    Label { Text(line).textSelection(.enabled) } icon: { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+                }
+                ForEach(tasks) { t in
+                    Label {
+                        Text("Task #\(t.id) “\(t.title)” — \(t.status.label.lowercased())" + (t.client.isEmpty ? "" : " · \(t.client)"))
+                    } icon: {
+                        Image(systemName: t.status == .done ? "checkmark.seal.fill" : t.status == .review ? "eye.circle.fill" : "circle.dotted")
+                            .foregroundStyle(t.status == .done ? .green : t.status == .review ? .blue : .secondary)
+                    }
+                }
+                ForEach(commits) { e in
+                    Label {
+                        Text(e.title.replacingOccurrences(of: "\(agent.name): ", with: "").oneLine.trunc(140))
+                            .foregroundStyle(.secondary)
+                    } icon: { Image(systemName: "arrow.triangle.branch").foregroundStyle(.purple) }
+                    .font(.callout)
+                }
+            }
+        }
+    }
+
+    var goal: String {
+        if !agent.goal.isEmpty { return agent.goal }
+        if let t = store.currentTask(of: agent.id) { return t.title }
+        return agent.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression)
+            .oneLine.trimmed.trunc(160)
     }
 }

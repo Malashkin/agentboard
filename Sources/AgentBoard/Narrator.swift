@@ -11,12 +11,50 @@ final class Narrator {
     private var failures = 0
 
     static let instructions = """
-    You write a status line for a board where a human keeps an eye on several AI coding agents.
-    Using the data below, describe in English what the agent is doing RIGHT NOW and why: one or two short sentences, no longer than 220 characters.
-    Write like a colleague, in plain words: the gist of the work, not a list of commands. Mention file names and technologies only if they matter for understanding.
-    If the agent finished its turn — say what it did and what it is waiting for. If it is waiting for the human — say what decision is needed. If it is stuck — say on what.
-    No markdown, no quotes, no preamble and no agent name. Start with a verb: "Fixing…", "Investigating…", "Finished…", "Waiting…".
+    You keep a board where a human watches several AI coding agents. From the data below, describe this agent's session \
+    for the human in plain English — like a colleague reporting to a manager, not a log.
+    Answer with ONLY a JSON object, no markdown, no preamble:
+    {"goal": "...", "progress": 0, "now": "...", "done": ["...", "..."]}
+    - goal: the task the human gave this agent, summarized in one short sentence (max 110 characters). If the human \
+    changed course, the current goal. Not a command list. Example: "Make the Terminal button work and bigger on agent cards".
+    - progress: how much of that goal is done, 0–100, your honest estimate from the actions and replies \
+    (finished and answered → 100; just started → 5–15). Use -1 only if there is nothing to judge.
+    - now: what it is doing RIGHT NOW and why, one or two short sentences, max 200 characters, starting with a verb \
+    ("Fixing…", "Checking…", "Finished…", "Waiting for your answer on…"). If it waits for the human, say what decision is needed. \
+    If it is stuck, say on what.
+    - done: what it has already accomplished in this session, as results a manager understands, past tense, newest first, \
+    at most 8 items, each max 120 characters ("Closed task #12 — the Terminal button now opens the right tab", \
+    "Added hover effects to every button", "Committed the fix (8b44215)"). Keep earlier items that are still true \
+    (they are given below), merge duplicates, drop trivia like reading files. Empty list if nothing is finished yet.
+    Mention file names or technologies only where they help understanding.
     """
+
+    struct Report: Equatable {
+        var goal: String
+        var progress: Int
+        var now: String
+        var done: [String]
+    }
+
+    /// The model's answer → a report. Tolerates code fences and text around the JSON; a plain sentence
+    /// (older behaviour, or a model that ignored the format) becomes `now` alone.
+    static func parse(_ raw: String) -> Report? {
+        let text = raw.trimmed
+        guard !text.isEmpty else { return nil }
+        if let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"), a < b,
+           let o = parseJSON(Data(text[a...b].utf8)) as? JSON {
+            let now = o.s("now").oneLine.trimmed.trunc(260)
+            let goal = o.s("goal").oneLine.trimmed.trunc(160)
+            var p = (o["progress"] as? NSNumber)?.intValue ?? Int(o.s("progress")) ?? -1
+            if p != -1 { p = max(0, min(100, p)) }
+            let done = ((o["done"] as? [Any]) ?? []).compactMap { ($0 as? String)?.oneLine.trimmed.trunc(160) }
+                .filter { !$0.isEmpty }.prefix(8)
+            guard !now.isEmpty || !goal.isEmpty else { return nil }
+            return Report(goal: goal, progress: p, now: now, done: Array(done))
+        }
+        let line = text.oneLine.trimmingCharacters(in: CharacterSet(charactersIn: "«»\"' ")).trunc(300)
+        return Report(goal: "", progress: -1, now: line, done: [])
+    }
 
     func start() {
         let t = DispatchSource.makeTimerSource(queue: queue)
@@ -52,16 +90,24 @@ final class Narrator {
             let st = a.displayStatus(staleMinutes: AppSettings.staleMinutes).rawValue
             let r = Shell.run(claude, Shell.modelArgs(model: AppSettings.narratorModel),
                               cwd: core.supportDir.path, input: Self.instructions + "\n\n---- DATA ----\n" + ctx, timeout: 60)
-            let text = r.out.trimmed.oneLine.trimmingCharacters(in: CharacterSet(charactersIn: "«»\"' ")).trunc(300)
-            guard r.ok, !text.isEmpty else { failures += 1; continue }
+            guard r.ok, let rep = Self.parse(r.out) else { failures += 1; continue }
             failures = 0
             lastStatus[a.id] = st
-            core.q.async {
-                core.db.update("agents", id: a.id, ["narrative": text, "narrative_at": now(), "narrative_event": latest])
-                core.addEvent(project: a.projectId, agent: a.id, kind: "narrative", title: "\(a.name): \(text)")
-                core.changed()
-            }
+            core.q.async { Self.store(rep, agent: a, event: latest, core: core) }
         }
+    }
+
+    /// Saves a report on the agent (empty parts keep what was there: a model that only answered `now`
+    /// doesn't wipe the goal or the done list).
+    static func store(_ rep: Report, agent a: Agent, event: Int64, core: Core) {
+        var f: [String: Any] = ["narrative_at": now(), "narrative_event": event]
+        if !rep.now.isEmpty { f["narrative"] = rep.now }
+        if !rep.goal.isEmpty { f["goal"] = rep.goal }
+        if rep.progress >= 0 || !rep.goal.isEmpty { f["progress"] = rep.progress }
+        if !rep.done.isEmpty { f["done_list"] = jsonString(rep.done) }
+        core.db.update("agents", id: a.id, f)
+        if !rep.now.isEmpty { core.addEvent(project: a.projectId, agent: a.id, kind: "narrative", title: "\(a.name): \(rep.now)") }
+        core.changed()
     }
 
     /// What the model sees: the request, task, status and the recent actions, oldest first.
@@ -78,7 +124,17 @@ final class Narrator {
             let prompt = a.lastPrompt.replacingOccurrences(of: "</?[a-z_]+( [^>]*)?>", with: "", options: .regularExpression)
             out.append("The human's last prompt: \"\(prompt.trunc(1200))\"")
         }
+        let prompts = core.db.query("SELECT detail FROM events WHERE agent_id=? AND kind='prompt' ORDER BY created_at DESC, id DESC LIMIT 5",
+                                    [a.id]).map { $0.s("detail").oneLine.trunc(400) }.reversed()
+        if prompts.count > 1 { out.append("The human's requests in this session (oldest first):\n" + prompts.map { "- " + $0 }.joined(separator: "\n")) }
+        if !a.goal.isEmpty { out.append("Previous goal summary: \(a.goal)" + (a.progress >= 0 ? " (\(a.progress)% done)" : "")) }
         if !a.narrative.isEmpty { out.append("Previous status line (for continuity): \(a.narrative)") }
+        if !a.doneList.isEmpty { out.append("Already accomplished (keep what is still true):\n" + a.doneList.map { "- " + $0 }.joined(separator: "\n")) }
+        let closed = core.db.query("SELECT * FROM tasks WHERE assignee=? AND status IN ('review','done') ORDER BY updated_at DESC LIMIT 5",
+                                   [a.id]).map(TaskItem.init)
+        if !closed.isEmpty { out.append("Its tasks that are finished or in review: " + closed.map { "#\($0.id) \"\($0.title)\" (\($0.status.label))" }.joined(separator: "; ")) }
+        let commits = core.db.query("SELECT title FROM events WHERE agent_id=? AND kind='commit' ORDER BY created_at DESC LIMIT 5", [a.id])
+        if !commits.isEmpty { out.append("Its commits: " + commits.map { $0.s("title").oneLine.trunc(140) }.joined(separator: "; ")) }
         let subs = core.db.query("SELECT type, description FROM subagents WHERE agent_id=? AND status='working'", [a.id])
         if !subs.isEmpty { out.append("Subagents running: " + subs.map { "\($0.s("type")) (\($0.s("description")))" }.joined(separator: "; ")) }
         let pending = core.pending.values.filter { $0.commit.agentId == a.id }.map { "\($0.commit.kind): \($0.commit.command.trunc(200))" }

@@ -1,7 +1,7 @@
 ---
 audience: backend
 owner: @Malashkin
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Background services
@@ -14,7 +14,7 @@ updated: 2026-11-11
 | `Telegram` | long polling `getUpdates` (25 s) while a bot is configured | Sends requests and "waiting" messages to the paired chat (only while away from the Mac by default) and turns buttons/replies into decisions or session messages (`TelegramLink.parse`) |
 | `GitMonitor` | every 15 s (every 60 s while the window is hidden) | Worktrees, status and today's commits per project |
 | UI ticker | every 15 s, only while the window is visible | Refreshes relative times ("5 min ago") |
-| `Narrator` | tick every 20 s | For agents with new events: plain-language line, at most every `narratorMinutes` (status changes immediately) |
+| `Narrator` | tick every 20 s | For agents with new events, at most every `narratorMinutes` (status changes immediately): one model call returns JSON `{goal, progress, now, done}` (`Narrator.parse`), stored without wiping parts the model left out (`Narrator.store`); the previous goal and done list are given back for continuity |
 | `TaskAutopilot` | on each human prompt / session end | Creates/rotates auto tasks; session end → review |
 | `AwayWatcher` | app/screen inactive ≥ `awayMinutes` | Digest of what happened meanwhile |
 | Summary timer | every 60 s | Writes the evening summary within an hour after the set time; yesterday's on next launch |

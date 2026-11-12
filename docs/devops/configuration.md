@@ -1,7 +1,7 @@
 ---
 audience: devops
 owner: @Malashkin
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Configuration
@@ -45,6 +45,7 @@ updated: 2026-11-11
 | `GEMINI_CLI_HOME` | Gemini CLI home (its `.gemini/settings.json` is what the installer edits; default `~`) |
 | `CODEX_HOME` | Codex folder (default `~/.codex`): logs **and** the `config.toml` / `hooks.json` the installers edit |
 | `AGENTBOARD_SNAPSHOT`, `AGENTBOARD_SNAPSHOT_DELAY` | Debug: save a PNG of the main window after N seconds |
+| `AGENTBOARD_OPEN_AGENT` | Debug, with `AGENTBOARD_SNAPSHOT`: snapshot that agent's details window instead |
 | `AGENTBOARD_INTERNAL` | Set for the app's child processes; makes the bridge a no-op |
 
 ## Command-line flags

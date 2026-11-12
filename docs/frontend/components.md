@@ -1,7 +1,7 @@
 ---
 audience: frontend
 owner: @Malashkin
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Views and components
@@ -9,7 +9,7 @@ updated: 2026-11-11
 | View | File | Purpose |
 |---|---|---|
 | Overview / project dashboards | `Views/Dashboard.swift`, `Views/ProjectViews.swift` | Widget grid (stats, decisions, agents, feed, tasks, time, reservations, commits, clients, hot files, summary); edit mode with drag & drop |
-| Agent cards and details | `Views/AgentViews.swift` | Card (narrative, stuck banner, subagents, reservations, quick reply, *Terminal* and *Message* buttons, context menu with briefings), detail sheet (pin to project, timeline, *Replay*), message sheet |
+| Agent cards and details | `Views/AgentViews.swift` | Card: task (goal) + `ProgressBar` + *Now*, stuck banner, quick reply, *Terminal* / *Message*, context menu with briefings — no technical rows. Detail sheet: `AgentStory` (task, progress, now, what it has done, its tasks and commits) on top, technical details (pin to project, files, timeline, subagents, reservations, messages) in a disclosure, *Replay*. Message sheet |
 | Replay | `Views/ReplayView.swift` | Step-by-step session replay: slider, play, request chapters, since-I-was-away, diff of every edit |
 | Needs-you panel, terminal focus, hot keys | `QuickAccess.swift` | `TerminalFocus` (tmux / herdr / iTerm2 / Terminal.app), `Attention` queue, `HotKeys`, floating `QuickPanel` |
 | Project memory | `Views/ProjectViews.swift` (`MemoryView`) | *Memory* tab: list, add, remove |

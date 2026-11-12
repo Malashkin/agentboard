@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Changelog
@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Positioning: AgentBoard works on top of the agents you already run; comparison with agent platforms (Multica, Paperclip) in the README and `docs/product/positioning.md`.
 
 ### Added
+- **Agents in plain words: task, progress, now, done.** The narrator now writes four things per session instead
+  of one line: the goal the human gave (summarized), an honest progress estimate (0–100 %), what it is doing right
+  now, and a running list of what it has finished — keeping earlier results that are still true. The card shows
+  only the task with a progress bar and "Now" (files, reservations, last raw action and the raw prompt are gone
+  from it); the agent window opens with *Task*, *Now* and *What it has done* (results, its tasks with status,
+  its commits), and folds the technical details (folder, files, timeline, subagents, reservations, messages) into
+  one disclosure.
 - **Everything clickable reacts to the pointer.** One button style across the app: a highlight under the
   pointer, a press state and the pointing-hand cursor; agent and task cards get an accent outline on hover,
   expandable feed rows a soft background.
@@ -125,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 426 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 433 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.

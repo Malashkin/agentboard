@@ -1,7 +1,7 @@
 ---
 audience: product
 owner: @Malashkin
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Features
@@ -15,6 +15,9 @@ updated: 2026-11-11
   Claude Code announces that as "waiting for your input".*
 - **Order of the cards** — agents that are working (including ones flagged as looping) come first;
   the rest keep a stable order by session start, so a card moves only when its status really changes.
+- **Task · progress · now · done** — the narrator summarizes the goal the human gave, estimates progress
+  (0–100 %), says what the agent is doing now and keeps a list of what it has finished; the card shows the first
+  three, the agent window opens with all four and folds the technical details away.
 - **Plain-language status** — a small model (Haiku via `claude -p`) writes one or two sentences about
   what the agent is doing, refreshed only after new activity (default: at most every 2 minutes per agent).
 - **Feed** — prompts, commands, edits, reads, searches, subagents, MCP calls, failures, answers, commits.

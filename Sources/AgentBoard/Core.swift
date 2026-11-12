@@ -175,6 +175,11 @@ final class Core {
         db.exec("CREATE INDEX IF NOT EXISTS events_agent_time ON events(agent_id, created_at)")
         addColumn("agents", "narrative_at", "REAL DEFAULT 0")
         addColumn("agents", "narrative_event", "INTEGER DEFAULT 0")
+        // The human-language picture of the session, written by the narrator: the goal the human set,
+        // how far along it is, and what is already done.
+        addColumn("agents", "goal", "TEXT DEFAULT ''")
+        addColumn("agents", "progress", "INTEGER DEFAULT -1")
+        addColumn("agents", "done_list", "TEXT DEFAULT ''")
         addColumn("events", "sub", "TEXT DEFAULT ''")
         addColumn("tasks", "worktree", "TEXT DEFAULT ''")
         addColumn("tasks", "branch", "TEXT DEFAULT ''")

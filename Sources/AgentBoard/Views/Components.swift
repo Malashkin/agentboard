@@ -320,3 +320,19 @@ struct FeedRowHover: ViewModifier {
         }
     }
 }
+
+/// A thin progress bar (0…1).
+struct ProgressBar: View {
+    let value: Double
+    var color: Color = .accentColor
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.secondary.opacity(0.18))
+                Capsule().fill(color).frame(width: max(4, g.size.width * min(1, max(0, value))))
+            }
+        }
+        .frame(height: 6)
+        .animation(.easeOut(duration: 0.4), value: value)
+    }
+}

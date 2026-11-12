@@ -318,6 +318,16 @@ extension SelfTest {
               "a wrong code pairs nothing, and nothing is obeyed before pairing")
         check(parse(msg("/status")) == .status && parse(msg("what's up")) == .status, "anything else gets the current status")
 
+        section("The agent in plain words: goal, progress, now, done", layer: "unit")
+        let rep = Narrator.parse(#"```json\n{"goal":"Fix login","progress":140,"now":"Running the auth tests.","done":["Found the bug","", "Patched session expiry"]}\n```"#)
+        check(rep == Narrator.Report(goal: "Fix login", progress: 100, now: "Running the auth tests.", done: ["Found the bug", "Patched session expiry"]),
+              "the model's JSON is read even inside a code fence; progress is clamped to 0–100, empty items dropped", "\(String(describing: rep))")
+        check(Narrator.parse("Fixing the failing auth tests.") == Narrator.Report(goal: "", progress: -1, now: "Fixing the failing auth tests.", done: []),
+              "a plain sentence (the model ignored the format) still becomes the 'now' line")
+        check(Narrator.parse(#"{"goal":"","now":""}"#) == nil && Narrator.parse("   ") == nil, "an empty answer changes nothing")
+        check(Narrator.parse(#"{"goal":"Ship it","progress":"35","now":"Packing","done":[]}"#)?.progress == 35, "progress given as text is understood")
+        check(Narrator.instructions.contains("\"goal\"") && Narrator.instructions.contains("\"done\""), "the model is asked for exactly these fields")
+
         section("Who needs you: the ⌥⌘J order", layer: "unit")
         let people = [boardAgent("idle-new", "idle", started: 1, seen: 9_900),
                       boardAgent("idle-old", "idle", started: 1, seen: 9_000),
@@ -922,6 +932,18 @@ extension SelfTest {
               "jumping to a time lands on the first step after it")
         let long = Core.editDiff("Write", ["content": Array(repeating: "x", count: 500).joined(separator: "\n")])
         check(long.components(separatedBy: "\n").count <= 122 && long.hasSuffix("more lines"), "a huge write is cut, and says so")
+
+        section("Narrator report is stored without wiping what it didn't say")
+        let mxNow = core.q.sync { core.agent(id: mx.id)! }
+        core.q.sync { Narrator.store(.init(goal: "Rename tokenize to lex", progress: 60, now: "Updating the call sites.", done: ["Renamed the function"]),
+                                     agent: mxNow, event: 1, core: core) }
+        core.q.sync { Narrator.store(.init(goal: "", progress: -1, now: "Running the tests.", done: []), agent: mxNow, event: 2, core: core) }
+        let told = core.q.sync { core.agent(id: mx.id)! }
+        check(told.goal == "Rename tokenize to lex" && told.progress == 60 && told.doneList == ["Renamed the function"] && told.narrative == "Running the tests.",
+              "a later 'now'-only report keeps the goal, progress and done list", "\(told.goal) \(told.progress) \(told.doneList) \(told.narrative)")
+        let ctxN = core.q.sync { Narrator.context(core, told) }
+        check(ctxN.contains("Already accomplished") && ctxN.contains("Renamed the function") && ctxN.contains("Previous goal summary: Rename tokenize to lex (60% done)"),
+              "the next report is written knowing the previous goal and what's done", ctxN.trunc(300))
 
         section("Delivering a human message into a session")
         _ = hook(["hook_event_name": "UserPromptSubmit", "session_id": "mx", "cwd": repo, "prompt": "Refactor the parser please"])
