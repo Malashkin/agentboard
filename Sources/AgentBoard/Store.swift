@@ -107,12 +107,15 @@ final class Store: ObservableObject {
         scanning = true
         core { c in
             let known = (c.allProjects() + c.archivedProjects()).map { ProjectDiscovery.Known(path: $0.path, commonDir: $0.commonDir) }
-            DispatchQueue.global(qos: .background).async {
-                let found = ProjectDiscovery.scan(known: known)
-                DispatchQueue.main.async {
-                    if self.suggestions != found { ThemeStore.animate { self.suggestions = found } }
-                    self.scanning = false
-                    if self.rescanPending { self.rescanPending = false; self.refreshSuggestions() }
+            DispatchQueue.main.async {
+                let live = self.liveFolders.map { ProjectDiscovery.Session(tool: "claude", cwd: $0.key, at: $0.value) }
+                DispatchQueue.global(qos: .background).async {
+                    let found = ProjectDiscovery.scan(known: known, live: live)
+                    DispatchQueue.main.async {
+                        if self.suggestions != found { ThemeStore.animate { self.suggestions = found } }
+                        self.scanning = false
+                        if self.rescanPending { self.rescanPending = false; self.refreshSuggestions() }
+                    }
                 }
             }
         }

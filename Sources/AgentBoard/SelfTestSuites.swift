@@ -1336,6 +1336,22 @@ extension SelfTest {
         hook("u1", plain)
         check(core.q.sync { reported } == [plain], "a session in a folder off the board is reported once (throttled)", "\(reported)")
         check(core.q.sync { core.db.query("SELECT 1 FROM agents WHERE session_id='u1'").isEmpty }, "…and still isn't tracked as an agent")
+
+        // Started in a folder of many things, building a new project inside it: the new folder is what's reported.
+        let box = base + "/box"
+        try? fm.createDirectory(atPath: box + "/old", withIntermediateDirectories: true)
+        reported = []
+        core.q.sync { core.handleClaudeHook(["hook_event_name": "PreToolUse", "session_id": "u2", "cwd": box, "tool_name": "Write",
+                                             "tool_input": ["file_path": box + "/Shop/config/app.yml", "content": "x"]]) { _ in } }
+        check(core.q.sync { reported } == [box + "/Shop"], "a session in a container folder reports the subfolder it writes into", "\(reported)")
+        check(Core.workFolders(cwd: box, input: ["command": "mkdir -p \(box)/Shop/{a,b} && cd \(box)/Shop && cat \(box)/notes.md"]) == [box + "/Shop"],
+              "…also from shell commands; a file right in the container isn't a project")
+        check(Core.workFolders(cwd: box, input: ["command": "ls \(box)/old \(box)/.cache/x /else\(box)/Z/y"]) == [box + "/old"],
+              "…an existing subfolder counts, hidden folders and paths that only contain the folder's path don't")
+        let live = [ProjectDiscovery.Session(tool: "claude", cwd: box + "/Shop", at: 1), ProjectDiscovery.Session(tool: "claude", cwd: box, at: 1)]
+        let withLive = ProjectDiscovery.build(live, known: [], ignored: [], excluded: [],
+                                              resolve: { ProjectDiscovery.Resolved(root: $0, commonDir: "", isGit: false) })
+        check(withLive.map(\.path) == [box + "/Shop"], "the reported subfolder is suggested, the container isn't", "\(withLive.map(\.path))")
         core.q.sync { core.onUnknownFolder = nil }
         try? fm.removeItem(atPath: claudeDir)
         try? fm.removeItem(atPath: codexDir + "/rollout-disc.jsonl")

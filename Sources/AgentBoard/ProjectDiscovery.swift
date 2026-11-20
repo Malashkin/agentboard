@@ -52,10 +52,12 @@ enum ProjectDiscovery {
 
     // MARK: - Scan (off the main thread)
 
+    /// `live`: folders running sessions are working in right now, as the hooks report them — including a project
+    /// being built inside a folder the session was started in (~/Desktop/fun → ~/Desktop/fun/Shop).
     static func scan(days: Int = 60, known: [Known], ignored: Set<String> = ignored,
-                     excluded: [String] = defaultExcluded) -> [Candidate] {
+                     excluded: [String] = defaultExcluded, live: [Session] = []) -> [Candidate] {
         let since = Date().addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970
-        return build(sessions(since: since), known: known, ignored: ignored, excluded: excluded, resolve: resolve)
+        return build(sessions(since: since) + live, known: known, ignored: ignored, excluded: excluded, resolve: resolve)
     }
 
     /// At most this many sessions are read per scan, newest first: enough to find every active project,

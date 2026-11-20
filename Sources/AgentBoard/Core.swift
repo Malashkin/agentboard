@@ -826,6 +826,39 @@ final class Core {
         return jsonData(["hookSpecificOutput": h])
     }
 
+    /// The folders directly inside `cwd` that a tool call works on: `/a/fun` + Write `/a/fun/Shop/app.py` → `/a/fun/Shop`.
+    /// Absolute paths only (file paths, `cd`/`mkdir` in commands); hidden folders are skipped.
+    static func workFolders(cwd: String, input: JSON) -> [String] {
+        guard cwd.hasPrefix("/") else { return [] }
+        let base = cwd.hasSuffix("/") ? cwd : cwd + "/"
+        var strings: [String] = []
+        func collect(_ v: Any) {
+            if let s = v as? String { strings.append(s) }
+            else if let o = v as? JSON { o.values.forEach(collect) }
+            else if let a = v as? [Any] { a.forEach(collect) }
+        }
+        collect(input)
+        var out: [String] = []
+        for s in strings {
+            var r = s.startIndex..<s.endIndex
+            while let f = s.range(of: base, range: r) {
+                r = f.upperBound..<s.endIndex
+                // Only where a path starts: at the beginning, after a space, a quote, `=` or `(`.
+                if f.lowerBound > s.startIndex, !" \t\n'\"=(".contains(s[s.index(before: f.lowerBound)]) { continue }
+                let rest = s[f.upperBound...]
+                let name = String(rest.prefix { !"/ \t\n'\";|&)<>{},*".contains($0) })
+                guard !name.isEmpty, !name.hasPrefix(".") else { continue }
+                let p = base + name
+                // A file right in cwd (`/a/fun/notes.md`) isn't a project: a path must go inside, or name an existing folder.
+                var isDir: ObjCBool = false
+                guard rest.dropFirst(name.count).first == "/"
+                        || (FileManager.default.fileExists(atPath: p, isDirectory: &isDir) && isDir.boolValue) else { continue }
+                if !out.contains(p) { out.append(p) }
+            }
+        }
+        return out
+    }
+
     static func isGitCommit(_ cmd: String) -> Bool {
         cmd.range(of: #"(^|[;&|(\s])git(\s+-[cC]\s+\S+|\s+--[a-z-]+(=\S+)?)*\s+commit(\s|$)"#, options: .regularExpression) != nil
     }
@@ -851,7 +884,12 @@ final class Core {
             let text = jsonString(input)
             found = allProjects().filter { $0.isMentioned(in: text) }.max { $0.path.count < $1.path.count }
         }
-        guard let project = found else { noteUnknownFolder(cwd); reply(nil); return }
+        guard let project = found else {
+            // Started in a folder that holds many things (~/Desktop/fun) but building one of them: that one is the project.
+            let work = (j["tool_input"] as? JSON).map { Self.workFolders(cwd: cwd, input: $0) } ?? []
+            if work.isEmpty { noteUnknownFolder(cwd) } else { work.forEach(noteUnknownFolder) }
+            reply(nil); return
+        }
         let agent = touchAgent(tool: agentTool, sessionId: sid, project: project, cwd: cwd,
                                transcript: j.str("transcript_path"), revive: event != "SessionEnd")
         if let tty = j.str("_tty"), tty != agent.tty { setAgent(agent.id, ["tty": tty]) }

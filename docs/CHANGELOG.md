@@ -1,7 +1,7 @@
 ---
 audience: all
 owner: @Malashkin
-updated: 2026-11-12
+updated: 2026-11-20
 ---
 
 # Changelog
@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+### Fixed
+- **A new project built inside a folder of many things is found.** A session started in `~/Desktop/fun` that creates `~/Desktop/fun/Shop` used to be invisible: discovery only looked at the folder the session started in, and that folder is a container, not a project. The hooks now report the subfolder the session writes into, and it appears under discovered projects while the agent works.
 
 ### Docs
 - Positioning: AgentBoard works on top of the agents you already run; comparison with agent platforms (Multica, Paperclip) in the README and `docs/product/positioning.md`.
@@ -132,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codex hooks (`~/.codex/hooks.json`): live actions, permission requests answered from the app, reservations enforced on patches.
 - Pin a session to a project; former project paths remembered when a folder moves.
 - Data retention: detailed actions kept 90 days.
-- Built-in self-test (`--self-test`, `scripts/test.sh`): 433 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
+- Built-in self-test (`--self-test`, `scripts/test.sh`): 437 checks in unit / contract / integration layers, property-based checks, an end-to-end commit through the real bridge and git hooks.
 - `scripts/mutation-check.py`: mutation testing of the riskiest rules.
 - Plain-language "what is it doing" line per agent (Claude Haiku via `claude -p`).
 - File reservations (`reserve_files` / `release_files`) enforced on edits and by a git pre-commit hook.
